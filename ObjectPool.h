@@ -77,6 +77,7 @@ public:
 	{
 		// 풀이 비어있을 때 오브젝트를 새로 생성하여 할당받는다.
 		// -> 무조건 생성자 호출
+		// 풀에 저장된 오브젝트를 할당 받을 때는 bHasReference가 꺼져 있는 경우만 생성자가 호출
 		if (poolCnt == 0)
 		{
 			Node* newNode = (Node*)malloc(sizeof(Node));
@@ -86,7 +87,6 @@ public:
 		}
 		else
 		{
-		// 풀에 저장된 오브젝트를 할당 받을 때는 bHasReference가 꺼져 있는 경우만 생성자가 호출
 			Node* allocNode = head->next;
 			head->next = allocNode->next;
 			allocNode->seed = poolSeed;

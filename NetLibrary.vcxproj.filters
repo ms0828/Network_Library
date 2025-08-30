@@ -30,6 +30,12 @@
     <ClCompile Include="ServerLog.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
+    <ClCompile Include="CMyServer.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="CEchoTest.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="CPacket.h">
@@ -47,7 +53,10 @@
     <ClInclude Include="ServerLog.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
-    <ClInclude Include="Protocol.h">
+    <ClInclude Include="CEchoTest.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="CMyServer.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
   </ItemGroup>

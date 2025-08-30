@@ -124,6 +124,8 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="CEchoTest.cpp" />
+    <ClCompile Include="CMyServer.cpp" />
     <ClCompile Include="CPacket.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="NetLibrary.cpp" />
@@ -131,10 +133,11 @@
     <ClCompile Include="ServerLog.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="CEchoTest.h" />
+    <ClInclude Include="CMyServer.h" />
     <ClInclude Include="CPacket.h" />
     <ClInclude Include="NetLibrary.h" />
     <ClInclude Include="ObjectPool.h" />
-    <ClInclude Include="Protocol.h" />
     <ClInclude Include="RingBuffer.h" />
     <ClInclude Include="ServerLog.h" />
   </ItemGroup>

@@ -1,4 +1,8 @@
 #include "NetLibrary.h"
+#include "CPacket.h"
+#include "ObjectPool.h"
+#include "ServerLog.h"
+
 
 
 CLanServer::CLanServer()
@@ -162,14 +166,9 @@ unsigned int CLanServer::IOCPWorkerProc(void* arg)
 			return 0;
 		}
 
-		USHORT arrIndex = core->GetSessionArrIndex(sessionId);
-		Session* session = core->sessionArr[arrIndex];
-		if (session->sessionId != sessionId)
-		{
-			_LOG(dfLOG_LEVEL_DEBUG, L"SendPacket - 세션 id가 일치하지 않습니다. 배열의 세션 id : %016 / 찾으려는 세션 id : %016  \n", session->sessionId, sessionId);
-			return false;
-		}
-
+		Session* session = core->FindSession(sessionId);
+		if (session == nullptr)
+			continue;
 
 		// ------------------------------------------
 		// [ transferred가 0이 되는 상황 ]
@@ -182,7 +181,8 @@ unsigned int CLanServer::IOCPWorkerProc(void* arg)
 		// ------------------------------------------
 		if (transferred == 0)
 		{
-			_LOG(dfLOG_LEVEL_ERROR, L"Session id : %016 => 완료 통지 transferred가 0입니다.\n", session->sessionId);
+			printf("Session id : %016llx => 완료 통지 transferred가 0입니다.\n", session->sessionId);
+
 			InterlockedExchange(&session->bDisconnect, true);
 			if (InterlockedDecrement((LONG*)&session->ioCount) == 0)
 				core->ReleaseSession(session);
@@ -195,8 +195,8 @@ unsigned int CLanServer::IOCPWorkerProc(void* arg)
 		if (sessionOlp->type == ERecv)
 		{
 			session->recvQ->MoveRear(transferred);
-			_LOG(dfLOG_LEVEL_DEBUG, L"------------Session Id : %016 / CompletionPort : Recv  / transferred : %d------------\n", session->sessionId, transferred);
-	
+			printf("------------Session Id : %016llx / CompletionPort : Recv  / transferred : %d------------\n", session->sessionId, transferred);
+
 			while (1)
 			{
 				//-------------------------------------------
@@ -239,7 +239,7 @@ unsigned int CLanServer::IOCPWorkerProc(void* arg)
 			// Send 완료 처리
 			//---------------------------------------------------------
 			session->sendQ->MoveFront(transferred);
-			_LOG(dfLOG_LEVEL_DEBUG, L"------------Session Id : %016 / CompletionPort : Send  / transferred : %d------------\n", session->sessionId, transferred);
+			printf("------------Session Id : %016llx / CompletionPort : Send  / transferred : %d------------\n", session->sessionId, transferred);
 			InterlockedExchange(&session->isSending, false);
 
 			//---------------------------------------------------------
@@ -455,22 +455,9 @@ void CLanServer::SendPost(Session* session)
 
 bool CLanServer::SendPacket(ULONGLONG sessionId, CPacket* message)
 {
-	//-------------------------------------------------------
-	// 세션 배열에서 해당 세션 검색
-	// 
-	// [예외 처리]
-	// - 현재 찾으려는 세션 ID와 세션 배열에서 찾은 session의 ID가 다르다면 false return
-	//-------------------------------------------------------
-	USHORT arrIndex = GetSessionArrIndex(sessionId);
-	Session* session = sessionArr[arrIndex];
+	Session* session = FindSession(sessionId);
 	if (session == nullptr)
 		return false;
-	if (session->sessionId != sessionId)
-	{
-		printf("SendPacket - 세션 id가 일치하지 않습니다. 배열의 세션 id : %016llx / 찾으려는 세션 id : %016llx  \n", session->sessionId, sessionId);
-		return false;
-	}
-
 
 	//-------------------------------------------------------
 	// 해당 세션의 SendQ Enqueue 및 SendPost 호출
@@ -519,7 +506,24 @@ void CLanServer::ReleaseSession(Session* session)
 USHORT CLanServer::GetSessionArrIndex(ULONGLONG sessionId)
 {
 	USHORT sessionArrIndex = (sessionId >> 48);
-
 	//printf("id : %016llx -> GetSessionArrIndex : %d\n", sessionId, sessionArrIndex);
 	return sessionArrIndex;
+}
+
+CLanServer::Session* CLanServer::FindSession(ULONGLONG sessionId)
+{
+	USHORT arrIndex = GetSessionArrIndex(sessionId);
+	Session* session = sessionArr[arrIndex];
+	if (session == nullptr)
+	{
+		printf("SendPacket - 이미 삭제된 세션입니다. 세션 id : %016llx  \n", sessionId);
+		return nullptr;
+	}
+	else if (session->sessionId != sessionId)
+	{
+		printf("SendPacket - 세션 id가 일치하지 않습니다. 배열의 세션 id : %016llx / 찾으려는 세션 id : %016llx  \n", session->sessionId, sessionId);
+		return nullptr;
+	}
+
+	return session;
 }

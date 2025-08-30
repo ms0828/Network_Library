@@ -1,14 +1,13 @@
 #pragma once
 #include <WinSock2.h>
-#include <Process.h>
 #include <WS2tcpip.h>
+#include <Process.h>
 #include <stack>
-#include "CPacket.h"
 #include "RingBuffer.h"
-#include "ServerLog.h"
-#include "Protocol.h"
-
 #pragma comment (lib, "ws2_32")
+
+class CPacket;
+class CRingBuffer;
 
 enum EIOTYPE
 {
@@ -20,6 +19,12 @@ struct SessionOverlapped
 	WSAOVERLAPPED overlapped;
 	EIOTYPE type; // send인지 recv인지
 };
+
+struct st_Header
+{
+	unsigned short payloadLen;
+};
+
 
 class CLanServer
 {
@@ -38,7 +43,6 @@ public:
 			isSending = false;
 			bDisconnect = false;
 			ioCount = 0;
-			//InitializeSRWLock(&lock);
 		}
 		~Session()
 		{
@@ -53,7 +57,6 @@ public:
 		SessionOverlapped recvOlp;
 		CRingBuffer* sendQ;
 		CRingBuffer* recvQ;
-		//SRWLOCK lock;
 		LONG isSending;
 		LONG bDisconnect;
 		unsigned int ioCount;
@@ -79,6 +82,15 @@ public:
 
 	USHORT GetSessionArrIndex(ULONGLONG sessionId);
 
+
+	//-------------------------------------------------------
+	// 세션 배열에서 해당 세션 검색
+	// 
+	// [nullptr을 반환하는 경우]
+	// - 찾으려는 세션이 이미 삭제된 경우
+	// - 찾으려는 세션 메모리가 세션 삭제 후, 재사용되어 찾으려는 세션과 다른 경우 
+	//-------------------------------------------------------
+	Session* FindSession(ULONGLONG sessionId);
 
 	//----------------------------------------------------------
 	// 스레드 함수 선언부

@@ -2,6 +2,8 @@
 #include <memory.h>
 #include "CPacket.h"
 
+CObjectPool<CPacket> CPacket::packetPool(true);
+
 CPacket::CPacket()
 {
 	buffer = (char*)malloc(sizeof(char) * DEFAULT_BUFSIZE);

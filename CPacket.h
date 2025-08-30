@@ -1,6 +1,8 @@
 #pragma once
+#include "ObjectPool.h"
 
 #define DEFAULT_BUFSIZE 1400
+
 
 class CPacket
 {
@@ -132,12 +134,15 @@ public:
 
 
 
-protected:
+private:
 	char* buffer;
 	char* readPtr;
 	char* writePtr;
 	
 	int	bufferMaxSize;
 	int	useSize;
+
+	static CObjectPool<CPacket> packetPool;
+	
 };
 
