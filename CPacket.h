@@ -4,6 +4,18 @@
 
 #define DEFAULT_BUFSIZE 1400
 
+//------------------------------------
+// ObjectPool 사용을 위한 Creator 
+//------------------------------------
+template<typename T>
+struct CreatorPacket
+{
+	int bufSize;
+	void operator()(T* place) const
+	{
+		new (place) T(bufSize);
+	}
+};
 
 class CPacket
 {
@@ -14,6 +26,7 @@ public:
 
 	~CPacket();
 
+public:
 
 	//////////////////////////////////////////////////////////////////////////
 	// 버퍼 초기화
@@ -144,11 +157,14 @@ private:
 	int	useSize;
 
 public:
-	static CObjectPool<CPacket> packetPool;
+	static CObjectPool<CPacket> sendCPacketPool;
+	static CObjectPool<CPacket, CreatorPacket<CPacket>> recvCPacketPool;
 
 	//---------------------------------------------------------------
-	// packetPoolLock을 사용하기 전에 InitializeSRWLock이 필요합니다.
+	// sendCPacketPool을 사용하기 전에 InitializeSRWLock이 필요합니다.
+	// recvCPacketPool을 사용하기 전에 InitializeSRWLock이 필요합니다.
 	//---------------------------------------------------------------
-	static SRWLOCK packetPoolLock;
+	static SRWLOCK sendCPacketPoolLock;
+	static SRWLOCK recvCPacketPoolLock;
 };
 

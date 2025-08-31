@@ -2,8 +2,12 @@
 #include <memory.h>
 #include "CPacket.h"
 
-CObjectPool<CPacket> CPacket::packetPool(true);
-SRWLOCK CPacket::packetPoolLock;
+
+CObjectPool<CPacket, CreatorPacket<CPacket>> CPacket::recvCPacketPool(true, CreatorPacket<CPacket>{40000});
+CObjectPool<CPacket> CPacket::sendCPacketPool(true);
+SRWLOCK CPacket::sendCPacketPoolLock;
+SRWLOCK CPacket::recvCPacketPoolLock;
+
 
 CPacket::CPacket()
 {

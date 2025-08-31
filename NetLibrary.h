@@ -52,6 +52,7 @@ public:
 			bDisconnect = false;
 			ioCount = 0;
 			sendPacketCount = 0;
+			recvPacket = nullptr;
 		}
 		~Session()
 		{
@@ -69,8 +70,11 @@ public:
 		LONG isSending;
 		LONG bDisconnect;
 		ULONG ioCount;
+
 		CPacket* freePacket[MAXSENDPACKETCOUNT];
 		ULONG sendPacketCount;
+
+		CPacket* recvPacket;
 	};
 
 

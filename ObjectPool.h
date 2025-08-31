@@ -1,8 +1,17 @@
 #pragma once
 
-#define MAX_POOLSIZE 128
 
 template<typename T>
+struct DefaultCreator
+{
+	void operator()(T* place) const
+	{
+		new (place) T();
+	}
+};
+
+
+template<typename T, typename Creator = DefaultCreator<T>>
 class CObjectPool
 {
 private:
@@ -19,8 +28,27 @@ private:
 	unsigned short poolSeed;
 	unsigned int poolCnt;
 
+
+	//----------------------------------------------
+	// 오브젝트 생성기(인자 보관 + 생성 호출)
+	// - Creator가 정의한 생성자를 호출하게 되며 외부에서 주입되어야한다.
+	// [Creator 예시]
+	// struct Creator~
+	// {
+	//		매겨변수 Type arg;
+	//		void operator()(T* place) const
+	//		{
+	//			new (place) T(arg);
+	//		}
+	// }
+	//----------------------------------------------
+	Creator creator;
+
 public:
 
+	//----------------------------------------------------
+	// 오브젝트 프리 리스트 (Creator 주입 X)
+	//----------------------------------------------------
 	CObjectPool(bool _bHasReference)
 	{
 		poolSeed = rand();
@@ -32,7 +60,53 @@ public:
 		poolCnt = 0;
 	}
 
+	//----------------------------------------------------
+	// 오브젝트 프리 리스트 (Creator 주입 O)
+	//----------------------------------------------------
+	CObjectPool(bool _bHasReference, const Creator& c) : creator(c)
+	{
+		poolSeed = rand();
+		bHasReference = _bHasReference;
+		head = (Node*)malloc(sizeof(Node));
+		tail = (Node*)malloc(sizeof(Node));
+		head->next = tail;
+		tail->next = nullptr;
+		poolCnt = 0;
+	}
+
+	//----------------------------------------------------
+	// 오브젝트 풀 (Creator 주입 X)
+	//----------------------------------------------------
 	CObjectPool(bool _bHasReference, int poolNum)
+	{
+		poolSeed = rand();
+		bHasReference = _bHasReference;
+		head = (Node*)malloc(sizeof(Node));
+		tail = (Node*)malloc(sizeof(Node));
+		head->next = tail;
+		tail->next = nullptr;
+
+		for (int i = 0; i < poolNum; i++)
+		{
+			Node* newNode = (Node*)malloc(sizeof(Node));
+			newNode->next = head->next;
+			head->next = newNode;
+			newNode->seed = poolSeed;
+
+			// bHasReference가 true인 경우에만 생성자 호출
+			if (bHasReference)
+			{
+				T* instance = (T*)newNode;
+				creator(instance);
+			}
+		}
+		poolCnt = poolNum;
+	}
+
+	//----------------------------------------------------
+	// 오브젝트 풀 (Creator 주입 O)
+	//----------------------------------------------------
+	CObjectPool(bool _bHasReference, int poolNum, const Creator& c) : creator(c)
 	{
 		poolSeed = rand();
 		bHasReference = _bHasReference;
@@ -40,6 +114,7 @@ public:
 		tail = (Node *)malloc(sizeof(Node));
 		head->next = tail;
 		tail->next = nullptr;
+
 		for (int i = 0; i < poolNum; i++)
 		{
 			Node* newNode = (Node *)malloc(sizeof(Node));
@@ -51,7 +126,7 @@ public:
 			if(bHasReference)
 			{
 				T* instance = (T*)newNode;
-				new (instance) T();
+				creator(instance);
 			}
 		}
 		poolCnt = poolNum;
@@ -81,7 +156,7 @@ public:
 		{
 			Node* newNode = (Node*)malloc(sizeof(Node));
 			newNode->seed = poolSeed;
-			new (newNode) T();
+			creator(&(newNode->instance));
 			return &(newNode->instance);
 		}
 		else
@@ -90,7 +165,8 @@ public:
 			head->next = allocNode->next;
 			allocNode->seed = poolSeed;
 			if (!bHasReference)
-				new (allocNode) T();
+				creator(&(allocNode->instance));
+			
 			poolCnt--;
 			return &(allocNode->instance);
 		}

@@ -12,7 +12,7 @@ CLanServer::CLanServer()
 	sessionIdCnt = 1;
 	sessionArrSize = 0;
 
-	InitializeSRWLock(&CPacket::packetPoolLock);
+	InitializeSRWLock(&CPacket::sendCPacketPoolLock);
 }
 
 CLanServer::~CLanServer()
@@ -246,9 +246,9 @@ unsigned int CLanServer::IOCPWorkerProc(void* arg)
 			printf("------------Session Id : %016llx / CompletionPort : Send  / transferred : %d------------\n", session->sessionId, transferred);
 			for (int i = 0; i < session->sendPacketCount; i++)
 			{
-				AcquireSRWLockExclusive(&CPacket::packetPoolLock);
-				CPacket::packetPool.freeObject(session->freePacket[i]);
-				ReleaseSRWLockExclusive(&CPacket::packetPoolLock);
+				AcquireSRWLockExclusive(&CPacket::sendCPacketPoolLock);
+				CPacket::sendCPacketPool.freeObject(session->freePacket[i]);
+				ReleaseSRWLockExclusive(&CPacket::sendCPacketPoolLock);
 			}
 			InterlockedExchange(&session->isSending, false);
 			core->SendPost(session);
@@ -339,6 +339,11 @@ void CLanServer::RecvPost(Session* session)
 	if (session->bDisconnect)
 		return;
 	printf("------------AsyncRecv  session id : %016llx------------\n", session->sessionId);
+
+
+	AcquireSRWLockExclusive(&CPacket::sendCPacketPoolLock);
+	CPacket* packet = CPacket::sendCPacketPool.allocObject();
+	ReleaseSRWLockExclusive(&CPacket::sendCPacketPoolLock);
 
 	//------------------------------------------------------------------
 	// RecvQ에 대한 WSABUF 세팅

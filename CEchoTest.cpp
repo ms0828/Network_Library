@@ -38,9 +38,9 @@ unsigned int CEcho::EchoThreadProc(void* arg)
 		header.payloadLen = sizeof(message.data);
 		
 
-		AcquireSRWLockExclusive(&CPacket::packetPoolLock);
-		CPacket* packet = CPacket::packetPool.allocObject();
-		ReleaseSRWLockExclusive(&CPacket::packetPoolLock);
+		AcquireSRWLockExclusive(&CPacket::sendCPacketPoolLock);
+		CPacket* packet = CPacket::sendCPacketPool.allocObject();
+		ReleaseSRWLockExclusive(&CPacket::sendCPacketPoolLock);
 		packet->Clear();
 		packet->PutData((char*)&header, sizeof(header));
 		packet->PutData((char*)&message.data, sizeof(__int64));
