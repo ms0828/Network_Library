@@ -196,7 +196,7 @@ unsigned int CLanServer::IOCPWorkerProc(void* arg)
 		//---------------------------------------------------------
 		if (sessionOlp->type == ERecv)
 		{
-			session->recvQ->MoveRear(transferred);
+			session->recvQ->MoveWritePos(transferred);
 			printf("------------Session Id : %016llx / CompletionPort : Recv  / transferred : %d------------\n", session->sessionId, transferred);
 
 			while (1)
@@ -205,29 +205,13 @@ unsigned int CLanServer::IOCPWorkerProc(void* arg)
 				// 완성된 메시지 추출
 				//-------------------------------------------
 				st_PacketHeader header;
-				int peekLen = session->recvQ->Peek((char*)&header, sizeof(header));
-				if (peekLen < sizeof(header))
+				int peekRet = session->recvQ->PeekData((char*)&header, sizeof(header));
+				if (peekRet < sizeof(header))
 					break;
-				if (session->recvQ->GetUseSize() < sizeof(header) + header.payloadLen)
+				if (session->recvQ->GetDataSize() < sizeof(header) + header.payloadLen)
 					break;
-				session->recvQ->MoveFront(sizeof(header));
-
-
-				//-------------------------------------------
-				// 메시지 추출
-				//-------------------------------------------
-				char messageBuf[1024];
-				int dequeueRet = session->recvQ->Dequeue(messageBuf, header.payloadLen);
-				CPacket message;
-				message.PutData((char*)&header, sizeof(header));
-				int putDataRet = message.PutData(messageBuf, header.payloadLen);
-				if (putDataRet == 0)
-				{
-					InterlockedExchange(&session->bDisconnect, true);
-					break;
-				}
-
-				core->OnMessage(session->sessionId, &message);
+				session->recvQ->MoveReadPos(sizeof(header));
+				core->OnMessage(session->sessionId, session->recvQ);
 			}
 
 			// ------------------------------------------
@@ -341,39 +325,65 @@ void CLanServer::RecvPost(Session* session)
 	printf("------------AsyncRecv  session id : %016llx------------\n", session->sessionId);
 
 
-	AcquireSRWLockExclusive(&CPacket::sendCPacketPoolLock);
-	CPacket* packet = CPacket::sendCPacketPool.allocObject();
-	ReleaseSRWLockExclusive(&CPacket::sendCPacketPoolLock);
+	//------------------------------------------------------------------
+	// 새로운 recvQ(CPacket)를 CPacket 풀에서 할당
+	//-------------------------------------------------------------------
+	AcquireSRWLockExclusive(&CPacket::recvCPacketPoolLock);
+	CPacket* newRecvQ = CPacket::recvCPacketPool.allocObject();
+	ReleaseSRWLockExclusive(&CPacket::recvCPacketPoolLock);
+	newRecvQ->Clear();
+
+
+	//---------------------------------------------------------------------------
+	// 이전에 사용했던 recvQ(CPacket) 반납
+	// - 이전 recvQ(CPacket)에 미완성된 데이터가 있다면 현재 할당한 recvQ(CPacket)로 옮기기
+	//---------------------------------------------------------------------------
+	if (session->recvQ != nullptr)
+	{
+		if (session->recvQ->GetDataSize() > 0)
+		{
+			int putRet = newRecvQ->PutData(session->recvQ->GetReadPtr(), session->recvQ->GetDataSize());	
+			//------------------------------------------------
+			// recvQ(CPacket)이 꽉 찬 경우
+			// - 설계되지 않은 큰 데이터가 들어왔으므로 연결 끊기
+			//------------------------------------------------
+			if (putRet == 0)
+			{
+				_LOG(dfLOG_LEVEL_ERROR, L"recvQ가 꽉 찼습니다.\n");
+				InterlockedExchange(&session->bDisconnect, true);
+				if (InterlockedDecrement((LONG*)&session->ioCount) == 0)
+				{
+					ReleaseSession(session);
+					return;
+				}
+			}
+		}
+
+		AcquireSRWLockExclusive(&CPacket::recvCPacketPoolLock);
+		CPacket::recvCPacketPool.freeObject(session->recvQ);
+		ReleaseSRWLockExclusive(&CPacket::recvCPacketPoolLock);
+	}
+
+	//------------------------------------------------------------------
+	// 해당 session에 할당 받은 recvQ(CPacket) 포인터 등록
+	//-------------------------------------------------------------------
+	session->recvQ = newRecvQ;
 
 	//------------------------------------------------------------------
 	// RecvQ에 대한 WSABUF 세팅
 	//-------------------------------------------------------------------
-	WSABUF wsaRecvBufArr[2];
-	int wsaBufCnt = 1;
-	int totalFreeSize = session->recvQ->GetFreeSize();
-	if (totalFreeSize == 0)
-	{
-		_LOG(dfLOG_LEVEL_ERROR, L"RECV가 꽉 찼습니다\n");
-		InterlockedExchange(&session->bDisconnect, true);
-		return;
-	}
-	int directEnqueueSize = session->recvQ->DirectEnqueueSize();
-	wsaRecvBufArr[0].buf = session->recvQ->GetRearBufferPtr();
-	wsaRecvBufArr[0].len = directEnqueueSize;
-	if (directEnqueueSize < totalFreeSize)
-	{
-		int remainFreeSize = totalFreeSize - directEnqueueSize;
-		wsaRecvBufArr[1].buf = session->recvQ->GetBufferPtr();
-		wsaRecvBufArr[1].len = remainFreeSize;
-		wsaBufCnt = 2;
-	}
+	WSABUF wsaRecvBuf;
+	wsaRecvBuf.buf = newRecvQ->GetBufferPtr();
+	wsaRecvBuf.len = newRecvQ->GetBufferSize();
+	
+
 
 	//--------------------------------------------------------
 	// 해당 세션의 IOCount 증감 후 WSARecv 호출
 	//--------------------------------------------------------
 	InterlockedIncrement((LONG*)&session->ioCount);
 	DWORD flags = 0;
-	int recvRet = WSARecv(session->sock, wsaRecvBufArr, wsaBufCnt, nullptr, &flags, (WSAOVERLAPPED*)&session->recvOlp, nullptr);
+	int recvRet = WSARecv(session->sock, &wsaRecvBuf, 1, nullptr, &flags, (WSAOVERLAPPED*)&session->recvOlp, nullptr);
 	if (recvRet == 0)
 	{
 		_LOG(dfLOG_LEVEL_DEBUG, L" RECV (FAST I/O) \n");
@@ -388,6 +398,7 @@ void CLanServer::RecvPost(Session* session)
 		else
 		{
 			_LOG(dfLOG_LEVEL_DEBUG, L"recv error : %d\n", error);
+			InterlockedExchange(&session->bDisconnect, true);
 			if (InterlockedDecrement((LONG*)&session->ioCount) == 0)
 			{
 				ReleaseSession(session);
@@ -435,7 +446,6 @@ void CLanServer::SendPost(Session* session)
 		}
 	}
 
-
 	
 	session->sendPacketCount = numOfPacket;
 	for (int i = 0; i < numOfPacket; i++)
@@ -444,6 +454,8 @@ void CLanServer::SendPost(Session* session)
 		int ret = session->sendQ->Dequeue((char*)&packet, sizeof(CPacket*));
 		wsaBufArr[i].buf = packet->GetBufferPtr();
 		wsaBufArr[i].len = packet->GetDataSize();
+
+		// Session에서 CPacketPool로의 반환을 위한 포인터 관리
 		session->freePacket[i] = packet;
 	}
 	

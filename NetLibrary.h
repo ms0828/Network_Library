@@ -47,17 +47,15 @@ public:
 			recvOlp.type = ERecv;
 			sendOlp.type = ESend;
 			sendQ = new CRingBuffer();
-			recvQ = new CRingBuffer();
 			isSending = false;
 			bDisconnect = false;
 			ioCount = 0;
 			sendPacketCount = 0;
-			recvPacket = nullptr;
+			recvQ = nullptr;
 		}
 		~Session()
 		{
 			delete sendQ;
-			delete recvQ;
 		}
 
 	public:
@@ -66,15 +64,19 @@ public:
 		SessionOverlapped sendOlp;
 		SessionOverlapped recvOlp;
 		CRingBuffer* sendQ;
-		CRingBuffer* recvQ;
+		CPacket* recvQ;			// 데이터 복사를 줄이기 위해 CPacket으로 직접 recv 받기
 		LONG isSending;
 		LONG bDisconnect;
 		ULONG ioCount;
+		
 
+		//--------------------------------------------------------
+		// Zero Copy(TCP 송수신 관점이 아닌 데이터 복사 관점)를 위한 부분
+		// - 반납할 CPacket 포인터 관리
+		//--------------------------------------------------------
 		CPacket* freePacket[MAXSENDPACKETCOUNT];
 		ULONG sendPacketCount;
-
-		CPacket* recvPacket;
+		
 	};
 
 

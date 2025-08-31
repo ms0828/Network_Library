@@ -267,11 +267,20 @@ CPacket& CPacket::operator>>(__int64& iValue)
 
 int CPacket::GetData(char* chpDest, int iSize)
 {
-	if (readPtr + iSize > buffer + useSize)
+	if (readPtr + iSize > readPtr + useSize)
 		return 0;
 	memcpy_s(chpDest, iSize, readPtr, iSize);
 	readPtr += iSize;
 	useSize -= iSize;
+	return iSize;
+}
+
+int CPacket::PeekData(char* chpDest, int iSize)
+{
+	if (readPtr + iSize > readPtr + useSize)
+		return 0;
+	memcpy_s(chpDest, iSize, readPtr, iSize);
+
 	return iSize;
 }
 
@@ -284,4 +293,9 @@ int CPacket::PutData(char* chpSrc, int iSrcSize)
 	writePtr += iSrcSize;
 	useSize += iSrcSize;
 	return iSrcSize;
+}
+
+char* CPacket::GetReadPtr()
+{
+	return readPtr;
 }

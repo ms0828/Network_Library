@@ -40,9 +40,10 @@ void CMyServer::OnMessage(ULONGLONG sessionId, CPacket* message)
 	// - 현재 에코 더미 자체가 헤더 안에 메시지 타입을 기재하고 있지 않음
 	//------------------------------------------------------------
 	
-	USHORT payloadLen;
+	//USHORT payloadLen;
 	ULONGLONG echoData;
-	*message >> payloadLen >> echoData;
+	//*message >> payloadLen >> echoData;
+	*message >> echoData;
 	echo->NetPacketProc_Echo(sessionId, echoData);
 
 }
