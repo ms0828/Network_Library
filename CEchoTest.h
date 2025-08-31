@@ -3,7 +3,14 @@
 
 class CRingBuffer;
 class CMyServer;
+class CPacket;
 class CEcho;
+
+struct st_JobMessage
+{
+	ULONGLONG sessionId;
+	ULONGLONG data;
+};
 
 struct st_EchoContext
 {
@@ -11,11 +18,6 @@ struct st_EchoContext
 	CEcho* echo;
 };
 
-struct st_JobMessage
-{
-	unsigned long long sessionId;
-	__int64 echoData;
-};
 
 class CEcho
 {
@@ -24,6 +26,9 @@ public:
 	~CEcho();
 
 	static unsigned int EchoThreadProc(void* arg);
+
+	void NetPacketProc_Echo(ULONGLONG sessionId, ULONGLONG echoData);
+	
 
 public:
 	CRingBuffer* jobQ;

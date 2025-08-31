@@ -24,7 +24,11 @@ struct SessionOverlapped
 	EIOTYPE type;
 };
 
-struct st_Header
+//-----------------------------------------------
+// 패킷 헤더 구조
+// (지금 에코 더미에 맞춰 간단한 패킷 헤더로 설계)
+//-----------------------------------------------
+struct st_PacketHeader
 {
 	unsigned short payloadLen;
 };

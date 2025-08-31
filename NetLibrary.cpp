@@ -204,7 +204,7 @@ unsigned int CLanServer::IOCPWorkerProc(void* arg)
 				//-------------------------------------------
 				// 완성된 메시지 추출
 				//-------------------------------------------
-				st_Header header;
+				st_PacketHeader header;
 				int peekLen = session->recvQ->Peek((char*)&header, sizeof(header));
 				if (peekLen < sizeof(header))
 					break;
