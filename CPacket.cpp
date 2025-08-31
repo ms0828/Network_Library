@@ -3,6 +3,7 @@
 #include "CPacket.h"
 
 CObjectPool<CPacket> CPacket::packetPool(true);
+SRWLOCK CPacket::packetPoolLock;
 
 CPacket::CPacket()
 {

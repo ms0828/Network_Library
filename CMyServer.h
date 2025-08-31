@@ -2,12 +2,12 @@
 #include "NetLibrary.h"
 #include "CEchoTest.h"
 
+
 class CMyServer : public CLanServer
 {
 public:
 	CMyServer();
 	~CMyServer();
-
 
 public:
 	virtual bool OnConnectionRequest(SOCKADDR_IN* requestAdr);

@@ -1,5 +1,4 @@
 #pragma once
-#include <iostream>
 
 #define MAX_POOLSIZE 128
 
@@ -110,4 +109,9 @@ public:
 		return true;
 	}
 	
+	unsigned int GetPoolCnt()
+	{
+		return poolCnt;
+	}
+
 };

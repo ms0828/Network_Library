@@ -11,6 +11,8 @@ CLanServer::CLanServer()
 	InitializeSRWLock(&indexStackLock);
 	sessionIdCnt = 1;
 	sessionArrSize = 0;
+
+	InitializeSRWLock(&CPacket::packetPoolLock);
 }
 
 CLanServer::~CLanServer()
@@ -237,14 +239,18 @@ unsigned int CLanServer::IOCPWorkerProc(void* arg)
 		{
 			//---------------------------------------------------------
 			// Send 완료 처리
+			//  - 사용한 직렬화 버퍼 반납
+			//  - 송신 중임을 나타내는 플래그 비활성화
+			//  - Send 송신 중에 SendQ에 전송할 데이터가 쌓였다면 다시 Send 
 			//---------------------------------------------------------
-			session->sendQ->MoveFront(transferred);
 			printf("------------Session Id : %016llx / CompletionPort : Send  / transferred : %d------------\n", session->sessionId, transferred);
+			for (int i = 0; i < session->sendPacketCount; i++)
+			{
+				AcquireSRWLockExclusive(&CPacket::packetPoolLock);
+				CPacket::packetPool.freeObject(session->freePacket[i]);
+				ReleaseSRWLockExclusive(&CPacket::packetPoolLock);
+			}
 			InterlockedExchange(&session->isSending, false);
-
-			//---------------------------------------------------------
-			// Send 송신 중에 SendQ에 전송할 데이터가 쌓였다면 다시 Send 
-			//---------------------------------------------------------
 			core->SendPost(session);
 		}
 
@@ -402,32 +408,47 @@ void CLanServer::SendPost(Session* session)
 	
 	//--------------------------------------------------------
 	// SendQ에 대한 WSABUF 세팅
+	// - SendQ에 포인터로써 담긴 패킷 수 가 최대 보낼 수 있는 패킷 수 보다 많다면 비정상적인 상황이므로 해당 연결 끊기
 	//--------------------------------------------------------
-	WSABUF wsaSendBufArr[2];
-	int wsaBufCnt = 1;
 	int totalUseSize = session->sendQ->GetUseSize();
 	if (totalUseSize == 0)
 	{
 		InterlockedExchange(&session->isSending, false);
 		return;
 	}
-	int directDequeueSize = session->sendQ->DirectDequeueSize();
-	wsaSendBufArr[0].buf = session->sendQ->GetFrontBufferPtr();
-	wsaSendBufArr[0].len = directDequeueSize;
-	if (directDequeueSize < totalUseSize)
+
+	WSABUF wsaBufArr[MAXSENDPACKETCOUNT];
+	int numOfPacket = totalUseSize / sizeof(CPacket*);
+	if (numOfPacket > MAXSENDPACKETCOUNT)
 	{
-		int remainUseSize = totalUseSize - directDequeueSize;
-		wsaSendBufArr[1].buf = session->sendQ->GetBufferPtr();
-		wsaSendBufArr[1].len = remainUseSize;
-		wsaBufCnt = 2;
+		printf("보낼 수 있는 패킷 수 초과 / id : %016llx------------\n", session->sessionId);
+		InterlockedExchange(&session->bDisconnect, true);
+		if (InterlockedDecrement((LONG*)&session->ioCount) == 0)
+		{
+			ReleaseSession(session);
+			return;
+		}
 	}
+
+
+	
+	session->sendPacketCount = numOfPacket;
+	for (int i = 0; i < numOfPacket; i++)
+	{
+		CPacket* packet;
+		int ret = session->sendQ->Dequeue((char*)&packet, sizeof(CPacket*));
+		wsaBufArr[i].buf = packet->GetBufferPtr();
+		wsaBufArr[i].len = packet->GetDataSize();
+		session->freePacket[i] = packet;
+	}
+	
 
 	//--------------------------------------------------------
 	// 해당 세션의 IOCount 증감 후 WSASend 호출
 	//--------------------------------------------------------
 	InterlockedIncrement((LONG*)&session->ioCount);
 	DWORD sendBytes;
-	int sendRet = WSASend(session->sock, wsaSendBufArr, wsaBufCnt, &sendBytes, 0, (WSAOVERLAPPED*)&session->sendOlp, nullptr);
+	int sendRet = WSASend(session->sock, wsaBufArr, numOfPacket, &sendBytes, 0, (WSAOVERLAPPED*)&session->sendOlp, nullptr);
 	if (sendRet == 0)
 	{
 		_LOG(dfLOG_LEVEL_DEBUG, L"Send (FAST I/O) / sendBytes : %d \n",sendBytes);
@@ -442,6 +463,7 @@ void CLanServer::SendPost(Session* session)
 		else
 		{
 			_LOG(dfLOG_LEVEL_DEBUG, L"send error : %d\n", error);
+			InterlockedExchange(&session->bDisconnect, true);
 			if (InterlockedDecrement((LONG*)&session->ioCount) == 0)
 			{
 				ReleaseSession(session);
@@ -453,7 +475,7 @@ void CLanServer::SendPost(Session* session)
 }
 
 
-bool CLanServer::SendPacket(ULONGLONG sessionId, CPacket* message)
+bool CLanServer::SendPacket(ULONGLONG sessionId, CPacket* packet)
 {
 	Session* session = FindSession(sessionId);
 	if (session == nullptr)
@@ -466,7 +488,7 @@ bool CLanServer::SendPacket(ULONGLONG sessionId, CPacket* message)
 	// - 송신 버퍼 공간이 모자라면 종료 플래그를 활성화
 	// - 연결 종료 및 세션 Release 유도
 	//-------------------------------------------------------
-	int enqueueRet = session->sendQ->Enqueue(message->GetBufferPtr(), message->GetDataSize());
+	int enqueueRet = session->sendQ->Enqueue((char *)&packet, sizeof(CPacket*));
 	if (enqueueRet == 0)
 	{
 		_LOG(dfLOG_LEVEL_ERROR, L"sendQ 공간이 모자랍니다.\n");

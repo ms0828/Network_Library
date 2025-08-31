@@ -1,5 +1,6 @@
 #pragma once
 #include "ObjectPool.h"
+#include "Windows.h"
 
 #define DEFAULT_BUFSIZE 1400
 
@@ -142,7 +143,12 @@ private:
 	int	bufferMaxSize;
 	int	useSize;
 
+public:
 	static CObjectPool<CPacket> packetPool;
-	
+
+	//---------------------------------------------------------------
+	// packetPoolLock을 사용하기 전에 InitializeSRWLock이 필요합니다.
+	//---------------------------------------------------------------
+	static SRWLOCK packetPoolLock;
 };
 

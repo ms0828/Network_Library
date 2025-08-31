@@ -6,8 +6,12 @@
 #include "RingBuffer.h"
 #pragma comment (lib, "ws2_32")
 
+
+#define MAXSENDPACKETCOUNT 300
+
 class CPacket;
 class CRingBuffer;
+
 
 enum EIOTYPE
 {
@@ -17,7 +21,7 @@ enum EIOTYPE
 struct SessionOverlapped
 {
 	WSAOVERLAPPED overlapped;
-	EIOTYPE type; // send인지 recv인지
+	EIOTYPE type;
 };
 
 struct st_Header
@@ -43,6 +47,7 @@ public:
 			isSending = false;
 			bDisconnect = false;
 			ioCount = 0;
+			sendPacketCount = 0;
 		}
 		~Session()
 		{
@@ -59,7 +64,9 @@ public:
 		CRingBuffer* recvQ;
 		LONG isSending;
 		LONG bDisconnect;
-		unsigned int ioCount;
+		ULONG ioCount;
+		CPacket* freePacket[MAXSENDPACKETCOUNT];
+		ULONG sendPacketCount;
 	};
 
 
@@ -75,7 +82,7 @@ public:
 
 	void RecvPost(Session* session);
 	void SendPost(Session* session);
-	bool SendPacket(ULONGLONG sessionId, CPacket* message);
+	bool SendPacket(ULONGLONG sessionId, CPacket* packet);
 
 	bool DisconnectSession(ULONGLONG sessionId);
 	void ReleaseSession(Session* session);
@@ -108,8 +115,6 @@ public:
 	virtual void OnRelease(ULONGLONG sessionId) = 0;
 	virtual void OnMessage(ULONGLONG sessionId, CPacket* message) = 0;
 
-
-	
 
 private:
 	SOCKET listenSock;

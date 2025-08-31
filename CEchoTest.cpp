@@ -1,7 +1,7 @@
 
 #include "RingBuffer.h"
-#include "CPacket.h"
 #include "CMyServer.h"
+#include "CPacket.h"
 #include "CEchoTest.h"
 
 CEcho::CEcho()
@@ -33,11 +33,16 @@ unsigned int CEcho::EchoThreadProc(void* arg)
 			continue;
 
 		st_Header header;
-		header.payloadLen = 8;
-		CPacket packet;
-		packet.PutData((char*)&header, sizeof(header));
-		packet.PutData((char*)&message.echoData, sizeof(__int64));
-		core->SendPacket(message.sessionId, &packet);
+		header.payloadLen = sizeof(message.echoData);
+		
+
+		AcquireSRWLockExclusive(&CPacket::packetPoolLock);
+		CPacket* packet = CPacket::packetPool.allocObject();
+		ReleaseSRWLockExclusive(&CPacket::packetPoolLock);
+		packet->Clear();
+		packet->PutData((char*)&header, sizeof(header));
+		packet->PutData((char*)&message.echoData, sizeof(__int64));
+		core->SendPacket(message.sessionId, packet);
 	}
 
 	return 0;
