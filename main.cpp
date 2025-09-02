@@ -19,8 +19,13 @@ int main()
 
 			if (ControlKey == L's' || ControlKey == L'S')
 			{
-
+				ProfileDataOutText("profile.txt");
 			}
+			if (ControlKey == L'c' || ControlKey == L'C')
+			{
+				ProfileReset();
+			}
+
 		}
 	}
 

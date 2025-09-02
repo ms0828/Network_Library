@@ -151,6 +151,8 @@ unsigned int CLanServer::IOCPWorkerProc(void* arg)
 		SessionOverlapped* sessionOlp;
 		bool gqcsRet = GetQueuedCompletionStatus(core->hCp, &transferred, (PULONG_PTR)&sessionId, (LPOVERLAPPED*)&sessionOlp, INFINITE);
 
+
+		PRO_BEGIN("CompletionRoutine");
 		//--------------------------------------------------------------
 		// lpOverlapped가 null인지는 무조건 확인 필요 
 		// - CP 핸들이 닫힌 경우 (또는 dwMillisecond 타임 아웃) -> Dequeue 실패
@@ -247,6 +249,7 @@ unsigned int CLanServer::IOCPWorkerProc(void* arg)
 			core->ReleaseSession(session);
 			continue;
 		}
+		PRO_END("CompletionRoutine");
 	}
 	return 0;
 }
@@ -314,6 +317,7 @@ unsigned int CLanServer::AcceptProc(void* arg)
 
 void CLanServer::RecvPost(Session* session)
 {
+	PRO_BEGIN("RecvPost");
 	//------------------------------------------------------------------
 	// RecvPost가 취소 되는 상황
 	// 1. 해당 세션의 Disconnect 플래그가 활성화된 경우
@@ -322,6 +326,7 @@ void CLanServer::RecvPost(Session* session)
 	//-------------------------------------------------------------------
 	if (session->bDisconnect)
 		return;
+	
 	printf("------------AsyncRecv  session id : %016llx------------\n", session->sessionId);
 
 
@@ -406,11 +411,14 @@ void CLanServer::RecvPost(Session* session)
 			}
 		}
 	}
+
+	PRO_END("RecvPost");
 	return;
 }
 
 void CLanServer::SendPost(Session* session)
 {
+	PRO_BEGIN("SendPost");
 	//--------------------------------------------------------
 	// SendPost가 취소 되는 상황
 	// 1. 현재 Send가 진행 중
@@ -488,12 +496,14 @@ void CLanServer::SendPost(Session* session)
 			}
 		}
 	}
+	PRO_END("SendPost");
 	return;
 }
 
 
 bool CLanServer::SendPacket(ULONGLONG sessionId, CPacket* packet)
 {
+	PRO_BEGIN("SendPacket");
 	Session* session = FindSession(sessionId);
 	if (session == nullptr)
 		return false;
@@ -515,6 +525,7 @@ bool CLanServer::SendPacket(ULONGLONG sessionId, CPacket* packet)
 
 	SendPost(session);
 
+	PRO_END("SendPacket");
 	return true;
 }
 

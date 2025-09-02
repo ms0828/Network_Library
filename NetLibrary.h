@@ -1,9 +1,13 @@
 #pragma once
+
+#define PROFILE
+
 #include <WinSock2.h>
 #include <WS2tcpip.h>
 #include <Process.h>
 #include <stack>
 #include "RingBuffer.h"
+#include "Profiler.h"
 #pragma comment (lib, "ws2_32")
 
 
