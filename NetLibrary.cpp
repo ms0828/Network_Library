@@ -1,7 +1,6 @@
 #include "NetLibrary.h"
 #include "CPacket.h"
 #include "ObjectPool.h"
-#include "ServerLog.h"
 
 
 
@@ -9,16 +8,20 @@ CLanServer::CLanServer()
 {
 	hCp = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, 0);
 	InitializeSRWLock(&indexStackLock);
+	listenSock = INVALID_SOCKET;
+	sessionArr = nullptr;
 	sessionIdCnt = 1;
 	sessionArrSize = 0;
-
+	iocpWorkerHandleArr = nullptr;
+	acceptThreadHandle = nullptr;
 	InitializeSRWLock(&CPacket::sendCPacketPoolLock);
+
+	InitLog(dfLOG_LEVEL_DEBUG);
 }
 
 CLanServer::~CLanServer()
 {
 	delete[] iocpWorkerHandleArr;
-
 	for (int i = 0; i < sessionArrSize; i++)
 	{
 		if (sessionArr[i] != nullptr)
@@ -29,7 +32,6 @@ CLanServer::~CLanServer()
 
 bool CLanServer::Start(PCWSTR servIp, USHORT servPort, ULONG numOfWorkerThread, ULONG maxClientNum)
 {
-	g_LogLevel = dfLOG_LEVEL_DEBUG;
 	//----------------------------------------------------------
 	// Session 배열 메모리 할당
 	//----------------------------------------------------------
@@ -185,8 +187,7 @@ unsigned int CLanServer::IOCPWorkerProc(void* arg)
 		// ------------------------------------------
 		if (transferred == 0)
 		{
-			printf("Session id : %016llx => 완료 통지 transferred가 0입니다.\n", session->sessionId);
-
+			_LOG(dfLOG_LEVEL_ERROR, L"Session id : %016llx => 완료 통지 transferred가 0입니다.\n", session->sessionId);
 			InterlockedExchange(&session->bDisconnect, true);
 			if (InterlockedDecrement((LONG*)&session->ioCount) == 0)
 				core->ReleaseSession(session);
@@ -199,8 +200,7 @@ unsigned int CLanServer::IOCPWorkerProc(void* arg)
 		if (sessionOlp->type == ERecv)
 		{
 			session->recvQ->MoveWritePos(transferred);
-			printf("------------Session Id : %016llx / CompletionPort : Recv  / transferred : %d------------\n", session->sessionId, transferred);
-
+			_LOG(dfLOG_LEVEL_DEBUG, L"------------Session Id : %016llx / CompletionPort : Recv  / transferred : %d------------\n", session->sessionId, transferred);
 			while (1)
 			{
 				//-------------------------------------------
@@ -229,7 +229,7 @@ unsigned int CLanServer::IOCPWorkerProc(void* arg)
 			//  - 송신 중임을 나타내는 플래그 비활성화
 			//  - Send 송신 중에 SendQ에 전송할 데이터가 쌓였다면 다시 Send 
 			//---------------------------------------------------------
-			printf("------------Session Id : %016llx / CompletionPort : Send  / transferred : %d------------\n", session->sessionId, transferred);
+			_LOG(dfLOG_LEVEL_DEBUG, L"------------Session Id : %016llx / CompletionPort : Send  / transferred : %d------------\n", session->sessionId, transferred);
 			for (int i = 0; i < session->sendPacketCount; i++)
 			{
 				AcquireSRWLockExclusive(&CPacket::sendCPacketPoolLock);
@@ -327,8 +327,7 @@ void CLanServer::RecvPost(Session* session)
 	if (session->bDisconnect)
 		return;
 	
-	printf("------------AsyncRecv  session id : %016llx------------\n", session->sessionId);
-
+	_LOG(dfLOG_LEVEL_DEBUG, L"------------AsyncRecv  session id : %016llx------------\n", session->sessionId);
 
 	//------------------------------------------------------------------
 	// 새로운 recvQ(CPacket)를 CPacket 풀에서 할당
@@ -428,7 +427,7 @@ void CLanServer::SendPost(Session* session)
 	if (InterlockedCompareExchange(&session->isSending, true, false) == true || session->bDisconnect)
 		return;
 
-	printf("------------AsyncSend  session id : %016llx------------\n", session->sessionId);
+	_LOG(dfLOG_LEVEL_DEBUG, L"------------AsyncSend  session id : %016llx------------\n", session->sessionId);
 	
 	//--------------------------------------------------------
 	// SendQ에 대한 WSABUF 세팅
@@ -445,7 +444,7 @@ void CLanServer::SendPost(Session* session)
 	int numOfPacket = totalUseSize / sizeof(CPacket*);
 	if (numOfPacket > MAXSENDPACKETCOUNT)
 	{
-		printf("보낼 수 있는 패킷 수 초과 / id : %016llx------------\n", session->sessionId);
+		_LOG(dfLOG_LEVEL_ERROR, L"보낼 수 있는 패킷 수 초과 / id : %016llx------------\n", session->sessionId);
 		InterlockedExchange(&session->bDisconnect, true);
 		if (InterlockedDecrement((LONG*)&session->ioCount) == 0)
 		{
@@ -532,7 +531,7 @@ bool CLanServer::SendPacket(ULONGLONG sessionId, CPacket* packet)
 
 void CLanServer::ReleaseSession(Session* session)
 {
-	printf("TryReleaseSession - id : %016llx", session->sessionId);
+	_LOG(dfLOG_LEVEL_DEBUG,L"TryReleaseSession - id : %016llx", session->sessionId);
 
 	//------------------------------------------------------------------------
 	// 1. 세션 배열에서 해당 세션 제거
@@ -566,12 +565,12 @@ CLanServer::Session* CLanServer::FindSession(ULONGLONG sessionId)
 	Session* session = sessionArr[arrIndex];
 	if (session == nullptr)
 	{
-		printf("SendPacket - 이미 삭제된 세션입니다. 세션 id : %016llx  \n", sessionId);
+		_LOG(dfLOG_LEVEL_ERROR, L"SendPacket - 이미 삭제된 세션입니다. 세션 id : %016llx  \n", sessionId);
 		return nullptr;
 	}
 	else if (session->sessionId != sessionId)
 	{
-		printf("SendPacket - 세션 id가 일치하지 않습니다. 배열의 세션 id : %016llx / 찾으려는 세션 id : %016llx  \n", session->sessionId, sessionId);
+		_LOG(dfLOG_LEVEL_ERROR, L"SendPacket - 세션 id가 일치하지 않습니다. 배열의 세션 id : %016llx / 찾으려는 세션 id : %016llx  \n", session->sessionId, sessionId);
 		return nullptr;
 	}
 

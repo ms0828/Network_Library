@@ -1,15 +1,15 @@
 #include <iostream>
 #include <conio.h>
 #include "CMyServer.h"
+#include <Windows.h>
+#include "Log.h"
 
 using namespace std;
-
 
 int main()
 {
 	CMyServer server;
 	server.Start(L"0.0.0.0", 6000, 5, 5000);
-	
 	
 	while (1)
 	{

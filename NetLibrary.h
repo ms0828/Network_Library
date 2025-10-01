@@ -8,6 +8,7 @@
 #include <stack>
 #include "RingBuffer.h"
 #include "Profiler.h"
+#include "Log.h"
 #pragma comment (lib, "ws2_32")
 
 

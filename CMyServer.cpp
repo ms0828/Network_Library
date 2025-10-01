@@ -39,10 +39,7 @@ void CMyServer::OnMessage(ULONGLONG sessionId, CPacket* message)
 	// - 간단한 에코 서버이므로, 메시지를 헤더 타입으로 분류하여 메시지 종류별 처리하는 과정은 생략
 	// - 현재 에코 더미 자체가 헤더 안에 메시지 타입을 기재하고 있지 않음
 	//------------------------------------------------------------
-	
-	//USHORT payloadLen;
 	ULONGLONG echoData;
-	//*message >> payloadLen >> echoData;
 	*message >> echoData;
 	echo->NetPacketProc_Echo(sessionId, echoData);
 
