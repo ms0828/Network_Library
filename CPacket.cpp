@@ -5,9 +5,6 @@
 
 CObjectPool<CPacket> CPacket::recvCPacketPool(true);
 CObjectPool<CPacket> CPacket::sendCPacketPool(true);
-SRWLOCK CPacket::sendCPacketPoolLock;
-SRWLOCK CPacket::recvCPacketPoolLock;
-
 
 CPacket::CPacket()
 {

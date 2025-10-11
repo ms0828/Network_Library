@@ -173,12 +173,5 @@ private:
 public:
 	static CObjectPool<CPacket> sendCPacketPool;
 	static CObjectPool<CPacket> recvCPacketPool;
-
-	//---------------------------------------------------------------
-	// sendCPacketPool을 사용하기 전에 InitializeSRWLock이 필요합니다.
-	// recvCPacketPool을 사용하기 전에 InitializeSRWLock이 필요합니다.
-	//---------------------------------------------------------------
-	static SRWLOCK sendCPacketPoolLock;
-	static SRWLOCK recvCPacketPoolLock;
 };
 

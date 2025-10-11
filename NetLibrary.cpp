@@ -7,14 +7,12 @@
 CLanServer::CLanServer()
 {
 	hCp = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, 0);
-	InitializeSRWLock(&indexStackLock);
 	listenSock = INVALID_SOCKET;
 	sessionArr = nullptr;
 	sessionIdCnt = 1;
 	sessionArrSize = 0;
 	iocpWorkerHandleArr = nullptr;
 	acceptThreadHandle = nullptr;
-	InitializeSRWLock(&CPacket::sendCPacketPoolLock);
 
 	InitLog(dfLOG_LEVEL_ERROR, ELogMode::FILE_DIRECT);
 }
@@ -37,8 +35,10 @@ bool CLanServer::Start(PCWSTR servIp, USHORT servPort, ULONG numOfWorkerThread, 
 	//----------------------------------------------------------
 	sessionArrSize = maxClientNum;
 	sessionArr = new Session*[sessionArrSize]();
-	for (int i = sessionArrSize - 1; i >= 0; i--)
-		indexStack.push(i);
+	for(int i = sessionArrSize - 1; i >= 0; i--)
+	{
+		indexStack.Push((USHORT &)i);
+	}
 
 	//----------------------------------------------------------
 	// Completion Port 생성 및 워커 스레드 생성
@@ -232,9 +232,7 @@ unsigned int CLanServer::IOCPWorkerProc(void* arg)
 			_LOG(dfLOG_LEVEL_DEBUG, L"------------Session Id : %016llx / CompletionPort : Send  / transferred : %d------------\n", session->sessionId, transferred);
 			for (int i = 0; i < session->sendPacketCount; i++)
 			{
-				AcquireSRWLockExclusive(&CPacket::sendCPacketPoolLock);
 				CPacket::sendCPacketPool.freeObject(session->freePacket[i]);
-				ReleaseSRWLockExclusive(&CPacket::sendCPacketPoolLock);
 			}
 			InterlockedExchange(&session->isSending, false);
 
@@ -285,11 +283,18 @@ unsigned int CLanServer::AcceptProc(void* arg)
 		//------------------------------------------------------
 		// 사용 가능한 세션 배열 인덱스 추출
 		//------------------------------------------------------
-		AcquireSRWLockExclusive(&core->indexStackLock);
-		ULONGLONG arrIndex = core->indexStack.top();
-		core->indexStack.pop();
-		ReleaseSRWLockExclusive(&core->indexStackLock);
-		
+		ULONGLONG arrIndex = 0;
+		bool ret = core->indexStack.Pop((USHORT&)arrIndex);
+		if (ret == false)
+		{
+			_LOG(dfLOG_LEVEL_ERROR, L"error : indexStack Pop Fail  -- stackSize = %d\n", core->indexStack.stackSize);
+			closesocket(clnSock);
+			continue;
+		}
+
+
+
+
 		//------------------------------------------------------
 		// 세션 Id 생성 ( 세션 배열 인덱스(2byte) + sessionIdCnt(6byte) )
 		//------------------------------------------------------
@@ -334,9 +339,7 @@ void CLanServer::RecvPost(Session* session)
 	//------------------------------------------------------------------
 	// 새로운 recvQ(CPacket)를 CPacket 풀에서 할당
 	//-------------------------------------------------------------------
-	AcquireSRWLockExclusive(&CPacket::recvCPacketPoolLock);
 	CPacket* newRecvQ = CPacket::recvCPacketPool.allocObject();
-	ReleaseSRWLockExclusive(&CPacket::recvCPacketPoolLock);
 	newRecvQ->Clear();
 
 
@@ -365,9 +368,7 @@ void CLanServer::RecvPost(Session* session)
 			}
 		}
 
-		AcquireSRWLockExclusive(&CPacket::recvCPacketPoolLock);
 		CPacket::recvCPacketPool.freeObject(session->recvQ);
-		ReleaseSRWLockExclusive(&CPacket::recvCPacketPoolLock);
 	}
 
 	//------------------------------------------------------------------
@@ -565,9 +566,7 @@ void CLanServer::ReleaseSession(Session* session)
 	//------------------------------------------------------------------------
 	USHORT arrIndex = GetSessionArrIndex(session->sessionId);
 	sessionArr[arrIndex] = nullptr;
-	AcquireSRWLockExclusive(&indexStackLock);
-	indexStack.push(arrIndex);
-	ReleaseSRWLockExclusive(&indexStackLock);
+	indexStack.Push(arrIndex);
 	
 	
 	// -------------------------------------------
@@ -591,12 +590,12 @@ CLanServer::Session* CLanServer::FindSession(ULONGLONG sessionId)
 	Session* session = sessionArr[arrIndex];
 	if (session == nullptr)
 	{
-		_LOG(dfLOG_LEVEL_ERROR, L"SendPacket - 이미 삭제된 세션입니다. 세션 id : %016llx  \n", sessionId);
+		_LOG(dfLOG_LEVEL_ERROR, L"FindSession - already deleted session / session id : %016llx \n", sessionId);
 		return nullptr;
 	}
 	else if (session->sessionId != sessionId)
 	{
-		_LOG(dfLOG_LEVEL_ERROR, L"SendPacket - 세션 id가 일치하지 않습니다. 배열의 세션 id : %016llx / 찾으려는 세션 id : %016llx  \n", session->sessionId, sessionId);
+		_LOG(dfLOG_LEVEL_ERROR, L"FindSession - session id is not correct. array session id : %016llx / find session id : %016llx  \n", session->sessionId, sessionId);
 		return nullptr;
 	}
 

@@ -138,6 +138,7 @@
     <ClInclude Include="CMyServer.h" />
     <ClInclude Include="CPacket.h" />
     <ClInclude Include="LockFreeQueue.h" />
+    <ClInclude Include="LockFreeStack.h" />
     <ClInclude Include="Log.h" />
     <ClInclude Include="NetLibrary.h" />
     <ClInclude Include="ObjectPool.h" />
