@@ -2,7 +2,7 @@
 #include "ObjectPool.h"
 #include "Windows.h"
 
-#define DEFAULT_BUFSIZE 1400
+#define DEFAULT_BUFSIZE 40000
 
 //------------------------------------
 // ObjectPool 사용을 위한 Creator 
@@ -172,7 +172,7 @@ private:
 
 public:
 	static CObjectPool<CPacket> sendCPacketPool;
-	static CObjectPool<CPacket, CreatorPacket<CPacket>> recvCPacketPool;
+	static CObjectPool<CPacket> recvCPacketPool;
 
 	//---------------------------------------------------------------
 	// sendCPacketPool을 사용하기 전에 InitializeSRWLock이 필요합니다.

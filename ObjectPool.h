@@ -1,132 +1,55 @@
 #pragma once
+#include <iostream>
+#include <Windows.h>
+#include "Log.h"
 
 
 template<typename T>
-struct DefaultCreator
-{
-	void operator()(T* place) const
-	{
-		new (place) T();
-	}
-};
-
-
-template<typename T, typename Creator = DefaultCreator<T>>
 class CObjectPool
 {
-private:
+public:
 	struct Node
 	{
+	public:
 		T instance;
-		unsigned short seed;
+		USHORT seed;
 		Node* next;
 	};
 
-	Node* head;
-	Node* tail;
-	bool bHasReference;
-	unsigned short poolSeed;
-	unsigned int poolCnt;
-
-
-	//----------------------------------------------
-	// 오브젝트 생성기(인자 보관 + 생성 호출)
-	// - Creator가 정의한 생성자를 호출하게 되며 외부에서 주입되어야한다.
-	// [Creator 예시]
-	// struct Creator~
-	// {
-	//		매겨변수 Type arg;
-	//		void operator()(T* place) const
-	//		{
-	//			new (place) T(arg);
-	//		}
-	// }
-	//----------------------------------------------
-	Creator creator;
-
 public:
 
-	//----------------------------------------------------
-	// 오브젝트 프리 리스트 (Creator 주입 X)
-	//----------------------------------------------------
-	CObjectPool(bool _bHasReference)
+	//------------------------------------------------------------
+	// 오브젝트 프리리스트
+	//------------------------------------------------------------
+	CObjectPool(bool preConstructor)
 	{
 		poolSeed = rand();
-		bHasReference = _bHasReference;
-		head = (Node*)malloc(sizeof(Node));
-		tail = (Node*)malloc(sizeof(Node));
-		head->next = tail;
-		tail->next = nullptr;
+		bPreConstructor = preConstructor;
+		top = nullptr;
 		poolCnt = 0;
 	}
 
-	//----------------------------------------------------
-	// 오브젝트 프리 리스트 (Creator 주입 O)
-	//----------------------------------------------------
-	CObjectPool(bool _bHasReference, const Creator& c) : creator(c)
+	//------------------------------------------------------------
+	// 오브젝트 풀
+	// - 멀티 스레드 환경에서는 이 생성자 호출이 끝나고 사용할 것
+	//------------------------------------------------------------
+	CObjectPool(bool preConstructor, int poolNum)
 	{
 		poolSeed = rand();
-		bHasReference = _bHasReference;
-		head = (Node*)malloc(sizeof(Node));
-		tail = (Node*)malloc(sizeof(Node));
-		head->next = tail;
-		tail->next = nullptr;
-		poolCnt = 0;
-	}
-
-	//----------------------------------------------------
-	// 오브젝트 풀 (Creator 주입 X)
-	//----------------------------------------------------
-	CObjectPool(bool _bHasReference, int poolNum)
-	{
-		poolSeed = rand();
-		bHasReference = _bHasReference;
-		head = (Node*)malloc(sizeof(Node));
-		tail = (Node*)malloc(sizeof(Node));
-		head->next = tail;
-		tail->next = nullptr;
-
+		bPreConstructor = preConstructor;
+		top = nullptr;
 		for (int i = 0; i < poolNum; i++)
 		{
 			Node* newNode = (Node*)malloc(sizeof(Node));
-			newNode->next = head->next;
-			head->next = newNode;
 			newNode->seed = poolSeed;
+			newNode->next = top;
+			top = newNode;
 
-			// bHasReference가 true인 경우에만 생성자 호출
-			if (bHasReference)
+			// bPreConstructor가 true인 경우에만 생성자 호출
+			if (bPreConstructor)
 			{
 				T* instance = (T*)newNode;
-				creator(instance);
-			}
-		}
-		poolCnt = poolNum;
-	}
-
-	//----------------------------------------------------
-	// 오브젝트 풀 (Creator 주입 O)
-	//----------------------------------------------------
-	CObjectPool(bool _bHasReference, int poolNum, const Creator& c) : creator(c)
-	{
-		poolSeed = rand();
-		bHasReference = _bHasReference;
-		head = (Node *)malloc(sizeof(Node));
-		tail = (Node *)malloc(sizeof(Node));
-		head->next = tail;
-		tail->next = nullptr;
-
-		for (int i = 0; i < poolNum; i++)
-		{
-			Node* newNode = (Node *)malloc(sizeof(Node));
-			newNode->next = head->next;
-			head->next = newNode;
-			newNode->seed = poolSeed;
-
-			// bHasReference가 true인 경우에만 생성자 호출
-			if(bHasReference)
-			{
-				T* instance = (T*)newNode;
-				creator(instance);
+				new (instance) T();
 			}
 		}
 		poolCnt = poolNum;
@@ -134,60 +57,108 @@ public:
 
 	~CObjectPool()
 	{
-		Node* curNode = head;
+		Node* curNode = UnpackingNode(top);
 		while (curNode != nullptr)
 		{
 			Node* deleteNode = curNode;
 			curNode = curNode->next;
-
-			if (deleteNode == head || deleteNode == tail)
-				free(deleteNode);
-			else
+			if (bPreConstructor)
 				delete deleteNode;
+			else
+				free(deleteNode);
 		}
 	}
 
 	T* allocObject()
 	{
-		// 풀이 비어있을 때 오브젝트를 새로 생성하여 할당받는다.
-		// -> 무조건 생성자 호출
-		// 풀에 저장된 오브젝트를 할당 받을 때는 bHasReference가 꺼져 있는 경우만 생성자가 호출
-		if (poolCnt == 0)
+		Node* t;
+		Node* nextTop;
+		Node* maskedT;
+
+		do
 		{
-			Node* newNode = (Node*)malloc(sizeof(Node));
-			newNode->seed = poolSeed;
-			creator(&(newNode->instance));
-			return &(newNode->instance);
-		}
-		else
-		{
-			Node* allocNode = head->next;
-			head->next = allocNode->next;
-			allocNode->seed = poolSeed;
-			if (!bHasReference)
-				creator(&(allocNode->instance));
+			t = top;
+			maskedT = UnpackingNode(t);
+			//----------------------------------------
+			// 풀이 비어있을 때 오브젝트를 새로 생성하여 할당
+			//----------------------------------------
+			if (maskedT == nullptr)
+			{
+				Node* newNode = (Node*)malloc(sizeof(Node));
+				newNode->seed = poolSeed;
+				newNode->next = nullptr;
+				new (newNode) T();
+				return &(newNode->instance);
+			}
 			
-			poolCnt--;
-			return &(allocNode->instance);
-		}
+			nextTop = PackingNode(maskedT->next, GetNodeStamp(t) + 1);
+		} while (InterlockedCompareExchangePointer((void* volatile*)&top, nextTop, t) != t);
+		InterlockedDecrement(&poolCnt);
+
+		//----------------------------------------
+		// bPreConstructor가 꺼져 있는 경우 할당마다 생성자가 호출
+		//----------------------------------------
+		if (!bPreConstructor)
+			new (maskedT) T();
+
+		return &(maskedT->instance);
 	}
 
 	bool freeObject(T* objectPtr)
 	{
-		Node* insertNode = (Node*)objectPtr;
-		if (insertNode->seed != poolSeed)
+		Node* freeNode = (Node*)objectPtr;
+		if (freeNode->seed != poolSeed)
+		{
+			_LOG(dfLOG_LEVEL_ERROR, L"Miss match poolSeed / freeObject Node : %016llx / Seed(%hu) != poolSeed(%hu)\n", freeNode, freeNode->seed, poolSeed);
 			return false;
-		insertNode->next = head->next;
-		head->next = insertNode;
-		if (!bHasReference)
+		}
+
+		Node* t;
+		Node* nextTop;
+		do
+		{
+			t = top;
+			Node* maskedT = UnpackingNode(t);
+			freeNode->next = maskedT;
+			nextTop = PackingNode(freeNode, GetNodeStamp(t) + 1);
+		} while (InterlockedCompareExchangePointer((void* volatile*)&top, nextTop, t) != t);
+		InterlockedIncrement(&poolCnt);
+
+		if (!bPreConstructor)
 			objectPtr->~T();
-		poolCnt++;
+
 		return true;
 	}
-	
-	unsigned int GetPoolCnt()
+
+	ULONG GetPoolCnt()
 	{
 		return poolCnt;
 	}
 
+
+	inline Node* PackingNode(Node* ptr, ULONGLONG stamp)
+	{
+		return (Node*)((ULONGLONG)ptr | (stamp << stampShift));
+	}
+	inline Node* UnpackingNode(Node* ptr)
+	{
+		return (Node*)((ULONGLONG)ptr & nodeMask);
+	}
+	inline ULONGLONG GetNodeStamp(Node* ptr)
+	{
+		return (ULONGLONG)ptr >> stampShift;
+	}
+
+private:
+	Node* top;
+	bool bPreConstructor;
+	USHORT poolSeed;
+	ULONG poolCnt;
+
+
+	//--------------------------------------------
+	// Node*의 하위 47비트 추출할 마스크
+	//--------------------------------------------
+	static const ULONGLONG nodeMask = (1ULL << 47) - 1;
+	static const ULONG stampShift = 47;
 };

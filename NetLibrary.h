@@ -8,6 +8,7 @@
 #include <stack>
 #include "RingBuffer.h"
 #include "Profiler.h"
+#include "LockFreeQueue.h"
 #include "Log.h"
 #pragma comment (lib, "ws2_32")
 
@@ -51,7 +52,8 @@ public:
 			sessionId = _id;
 			recvOlp.type = ERecv;
 			sendOlp.type = ESend;
-			sendQ = new CRingBuffer();
+			//sendQ = new CRingBuffer();
+			sendLFQ = new CLockFreeQueue<CPacket*>();
 			isSending = false;
 			bDisconnect = false;
 			ioCount = 0;
@@ -60,7 +62,7 @@ public:
 		}
 		~Session()
 		{
-			delete sendQ;
+			delete sendLFQ;
 		}
 
 	public:
@@ -68,7 +70,8 @@ public:
 		ULONGLONG sessionId;
 		SessionOverlapped sendOlp;
 		SessionOverlapped recvOlp;
-		CRingBuffer* sendQ;
+		//CRingBuffer* sendQ;
+		CLockFreeQueue<CPacket*>* sendLFQ;
 		CPacket* recvQ;			// 데이터 복사를 줄이기 위해 CPacket으로 직접 recv 받기
 		LONG isSending;
 		LONG bDisconnect;

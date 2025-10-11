@@ -1,7 +1,7 @@
 #include "NetLibrary.h"
 #include "CPacket.h"
 #include "ObjectPool.h"
-
+#include "Log.h"
 
 
 CLanServer::CLanServer()
@@ -16,7 +16,7 @@ CLanServer::CLanServer()
 	acceptThreadHandle = nullptr;
 	InitializeSRWLock(&CPacket::sendCPacketPoolLock);
 
-	InitLog(dfLOG_LEVEL_DEBUG);
+	InitLog(dfLOG_LEVEL_ERROR, ELogMode::FILE_DIRECT);
 }
 
 CLanServer::~CLanServer()
@@ -187,7 +187,7 @@ unsigned int CLanServer::IOCPWorkerProc(void* arg)
 		// ------------------------------------------
 		if (transferred == 0)
 		{
-			_LOG(dfLOG_LEVEL_ERROR, L"Session id : %016llx => 완료 통지 transferred가 0입니다.\n", session->sessionId);
+			_LOG(dfLOG_LEVEL_ERROR, L"Session id : %016llx => completion port transferred = 0.\n", session->sessionId);
 			InterlockedExchange(&session->bDisconnect, true);
 			if (InterlockedDecrement((LONG*)&session->ioCount) == 0)
 				core->ReleaseSession(session);
@@ -237,7 +237,9 @@ unsigned int CLanServer::IOCPWorkerProc(void* arg)
 				ReleaseSRWLockExclusive(&CPacket::sendCPacketPoolLock);
 			}
 			InterlockedExchange(&session->isSending, false);
-			core->SendPost(session);
+
+			if(session->sendLFQ->size > 0)
+				core->SendPost(session);
 		}
 
 
@@ -423,56 +425,91 @@ void CLanServer::SendPost(Session* session)
 	// 1. 현재 Send가 진행 중
 	// 2. 해당 세션의 Disconnect 플래그가 활성화된 경우
 	// 3. 해당 세션의 SendQ가 비어있는 경우
-	//-------------------------------------------------------
+	//--------------------------------------------------------
 	if (InterlockedCompareExchange(&session->isSending, true, false) == true || session->bDisconnect)
 		return;
 
 	_LOG(dfLOG_LEVEL_DEBUG, L"------------AsyncSend  session id : %016llx------------\n", session->sessionId);
 	
+
 	//--------------------------------------------------------
 	// SendQ에 대한 WSABUF 세팅
-	// - SendQ에 포인터로써 담긴 패킷 수 가 최대 보낼 수 있는 패킷 수 보다 많다면 비정상적인 상황이므로 해당 연결 끊기
+	// - SendQ에 담긴 패킷 수가 0이라면 SendPost 취소
+	// - SendQ에 담긴 패킷 수가 최대 보낼 수 있는 패킷 수 보다 많다면 비정상적인 상황이므로 해당 연결 끊기
 	//--------------------------------------------------------
-	int totalUseSize = session->sendQ->GetUseSize();
-	if (totalUseSize == 0)
+	WSABUF wsaBufArr[MAXSENDPACKETCOUNT];
+	int sendQSize = session->sendLFQ->size;
+	if (sendQSize == 0)
 	{
+		_LOG(dfLOG_LEVEL_ERROR, L"id : %016llx  / LFQ size = 0\n", session->sessionId);
 		InterlockedExchange(&session->isSending, false);
+
+		//------------------------------------------------------------------------------------------
+		// [ 예외 처리 ]
+		// size를 0으로 봤으나, 이 시점에 소유권으로 인해 다른 SendPacket에서 SendPost가 실패한다면 마지막 Enqueue된 패킷은 전송되지 못한다.
+		// => size가 0인 시점에 소유권 포기 이후, 한 번더 size를 체크하여 재시도를 수행한다.
+		//------------------------------------------------------------------------------------------
+		if (session->sendLFQ->size > 0)
+			SendPost(session);
 		return;
 	}
-
-	WSABUF wsaBufArr[MAXSENDPACKETCOUNT];
-	int numOfPacket = totalUseSize / sizeof(CPacket*);
-	if (numOfPacket > MAXSENDPACKETCOUNT)
+	if (sendQSize > MAXSENDPACKETCOUNT)
 	{
 		_LOG(dfLOG_LEVEL_ERROR, L"보낼 수 있는 패킷 수 초과 / id : %016llx------------\n", session->sessionId);
 		InterlockedExchange(&session->bDisconnect, true);
 		if (InterlockedDecrement((LONG*)&session->ioCount) == 0)
-		{
 			ReleaseSession(session);
-			return;
-		}
+		return;
 	}
 
-	
-	session->sendPacketCount = numOfPacket;
-	for (int i = 0; i < numOfPacket; i++)
+	//----------------------------------------------------------------
+	// 현 락프리큐 구현은 ABA로 인한 일시적 큐 끊김이 발생할 가능성이 존재
+	// - 락프리큐 size와 실제 Dequeue가능한 size가 일치하지 않을 가능성이 있다.
+	// - 이에 대해서 별도의 Dequeue가 성공한 개수(sendPacketCount)를 계산한다.
+	//----------------------------------------------------------------
+	int sendPacketCount = 0;
+	for (int i = 0; i < sendQSize; i++)
 	{
 		CPacket* packet;
-		int ret = session->sendQ->Dequeue((char*)&packet, sizeof(CPacket*));
+		bool ret = session->sendLFQ->Dequeue(packet);
+		if (ret == false)
+		{
+			_LOG(dfLOG_LEVEL_ERROR, L"id : %016llx  / LFQ Dequeue Fail! (ABA => size != dequeueCount)\n", session->sessionId);
+			break;
+		}
 		wsaBufArr[i].buf = packet->GetBufferPtr();
 		wsaBufArr[i].len = packet->GetDataSize();
 
 		// Session에서 CPacketPool로의 반환을 위한 포인터 관리
 		session->freePacket[i] = packet;
+		++sendPacketCount;
+	}
+	session->sendPacketCount = sendPacketCount;
+	//------------------------------------------------------------------------------------------
+	// - 만약에 위 문제로 인해서 sendPacketCount가 0이라면 SendPost는 취소한다.
+	// 
+	// [ 예외 처리 ]
+	// - 이 시점에 소유권으로 인해 다른 SendPacket에서 SendPost가 실패한다면 마지막 Enqueue된 패킷은 전송되지 못한다.
+	// - 소유권 포기 이후, 한 번더 size를 체크하여 재시도를 수행한다.
+	//------------------------------------------------------------------------------------------
+	if (session->sendPacketCount == 0)
+	{
+		_LOG(dfLOG_LEVEL_ERROR, L"id : %016llx  / SendPacketCount = 0)! \n", session->sessionId);
+		InterlockedExchange(&session->isSending, false);
+
+		if (session->sendLFQ->size > 0)
+			SendPost(session);
+		return;
 	}
 	
+
 
 	//--------------------------------------------------------
 	// 해당 세션의 IOCount 증감 후 WSASend 호출
 	//--------------------------------------------------------
 	InterlockedIncrement((LONG*)&session->ioCount);
 	DWORD sendBytes;
-	int sendRet = WSASend(session->sock, wsaBufArr, numOfPacket, &sendBytes, 0, (WSAOVERLAPPED*)&session->sendOlp, nullptr);
+	int sendRet = WSASend(session->sock, wsaBufArr, sendQSize, &sendBytes, 0, (WSAOVERLAPPED*)&session->sendOlp, nullptr);
 	if (sendRet == 0)
 	{
 		_LOG(dfLOG_LEVEL_DEBUG, L"Send (FAST I/O) / sendBytes : %d \n",sendBytes);
@@ -509,19 +546,8 @@ bool CLanServer::SendPacket(ULONGLONG sessionId, CPacket* packet)
 
 	//-------------------------------------------------------
 	// 해당 세션의 SendQ Enqueue 및 SendPost 호출
-	// 
-	// [예외 처리]
-	// - 송신 버퍼 공간이 모자라면 종료 플래그를 활성화
-	// - 연결 종료 및 세션 Release 유도
 	//-------------------------------------------------------
-	int enqueueRet = session->sendQ->Enqueue((char *)&packet, sizeof(CPacket*));
-	if (enqueueRet == 0)
-	{
-		_LOG(dfLOG_LEVEL_ERROR, L"sendQ 공간이 모자랍니다.\n");
-		InterlockedExchange(&session->bDisconnect, true);
-		return false;
-	}
-
+	session->sendLFQ->Enqueue(packet);
 	SendPost(session);
 
 	PRO_END("SendPacket");

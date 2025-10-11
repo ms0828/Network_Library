@@ -3,7 +3,7 @@
 #include "CPacket.h"
 
 
-CObjectPool<CPacket, CreatorPacket<CPacket>> CPacket::recvCPacketPool(true, CreatorPacket<CPacket>{40000});
+CObjectPool<CPacket> CPacket::recvCPacketPool(true);
 CObjectPool<CPacket> CPacket::sendCPacketPool(true);
 SRWLOCK CPacket::sendCPacketPoolLock;
 SRWLOCK CPacket::recvCPacketPoolLock;

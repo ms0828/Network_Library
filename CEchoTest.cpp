@@ -1,6 +1,5 @@
-
-#include "RingBuffer.h"
 #include "CMyServer.h"
+#include "RingBuffer.h"
 #include "CPacket.h"
 #include "CEchoTest.h"
 

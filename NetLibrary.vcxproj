@@ -137,6 +137,7 @@
     <ClInclude Include="CEchoTest.h" />
     <ClInclude Include="CMyServer.h" />
     <ClInclude Include="CPacket.h" />
+    <ClInclude Include="LockFreeQueue.h" />
     <ClInclude Include="Log.h" />
     <ClInclude Include="NetLibrary.h" />
     <ClInclude Include="ObjectPool.h" />
