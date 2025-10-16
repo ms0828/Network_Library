@@ -47,23 +47,54 @@ public:
 	class Session
 	{
 	public:
-		Session(SOCKET _sock, ULONGLONG _id)
+		Session()
 		{
-			sock = _sock;
-			sessionId = _id;
+			sock = INVALID_SOCKET;
+			sessionId = 0;
 			recvOlp.type = ERecv;
 			sendOlp.type = ESend;
 			sendLFQ = new CLockFreeQueue<CPacket*>();
+			recvQ = nullptr;
 			isSending = false;
 			bDisconnect = false;
-			ioCount = 0;
+			bRecvRST = false; // 디버깅용
+			refCount = 0;
 			sendPacketCount = 0;
-			recvQ = nullptr;
 		}
 		~Session()
 		{
 			delete sendLFQ;
 		}
+
+
+		//------------------------------------------------
+		// 초기화 순서 중요
+		// - AcquireSessionById에서 예외적 상황으로 증가시킨 RefCount를 감소하는 경우에 재할당된 세션을 끊어버릴 수 있음
+		// - RefCount의 ReleaseFlag를 RefCount 증가 이후에 비활성화함으로써 해결
+		//------------------------------------------------
+		void InitSession(SOCKET _sock, ULONGLONG _id)
+		{	
+			InterlockedIncrement(&refCount);
+			while (1)
+			{
+				CPacket* packet;
+				if (sendLFQ->Dequeue(packet) == false)
+					break;
+			};
+			recvOlp.type = ERecv;
+			memset(&recvOlp, 0, sizeof(WSAOVERLAPPED));
+			sendOlp.type = ESend;
+			memset(&sendOlp, 0, sizeof(WSAOVERLAPPED));
+			recvQ = nullptr;
+			isSending = false;
+			bDisconnect = false;
+			bRecvRST = false;
+			sendPacketCount = 0;
+			sessionId = _id;
+			sock = _sock;
+			InterlockedAnd((LONG*)&refCount, ~(1 << 31));
+		}
+
 
 	public:
 		SOCKET sock;
@@ -74,8 +105,8 @@ public:
 		CPacket* recvQ;			// 데이터 복사를 줄이기 위해 CPacket으로 직접 recv 받기
 		LONG isSending;
 		LONG bDisconnect;
-		ULONG ioCount;
-		
+		ULONG refCount;
+		ULONG bRecvRST;
 
 		//--------------------------------------------------------
 		// Zero Copy(TCP 송수신 관점이 아닌 데이터 복사 관점)를 위한 부분
@@ -98,23 +129,39 @@ public:
 	void Stop();
 
 	void RecvPost(Session* session);
-	void SendPost(Session* session);
+	void SendPost(Session* session, bool bCallFromSendPacket);
 	bool SendPacket(ULONGLONG sessionId, CPacket* packet);
 
 	bool DisconnectSession(ULONGLONG sessionId);
+
 	void ReleaseSession(Session* session);
 
 	USHORT GetSessionArrIndex(ULONGLONG sessionId);
 
 
 	//-------------------------------------------------------
-	// 세션 배열에서 해당 세션 검색
+	// 세션Id로 세션을 검색 및 세션에 대한 참조권 확보
+	// - 해당 세션을 검색 및 RefCount를 증가
+	// - 이 함수로 찾은 세션은 RefCount를 감소하기 전까지 세션이 바뀌지 않음을 보장할 수 있다.
 	// 
 	// [nullptr을 반환하는 경우]
-	// - 찾으려는 세션이 이미 삭제된 경우
-	// - 찾으려는 세션 메모리가 세션 삭제 후, 재사용되어 찾으려는 세션과 다른 경우 
+	// - 찾으려는 세션이 없는 경우
+	// - 찾으려는 세션이 이미 Release에 진입하였거나 Release 된 경우
+	// - 찾으려는 세션이 이미 삭제되어 메모리가 재사용되어 찾으려는 세션과 다른 경우
 	//-------------------------------------------------------
-	Session* FindSession(ULONGLONG sessionId);
+	Session* AcquireSessionById(ULONGLONG sessionId);
+	
+
+	//-------------------------------------------------------
+	// 세션Id로 세션을 검색 [참조권을 획득하지 않는 함수]
+	// 
+	// [nullptr을 반환하는 경우]
+	// - 찾으려는 세션이 없는 경우
+	// - 찾으려는 세션이 이미 삭제되어 메모리가 재사용되어 찾으려는 세션과 다른 경우
+	//-------------------------------------------------------
+	Session* FindSessionById(ULONGLONG sessionId);
+
+
 
 	//----------------------------------------------------------
 	// 스레드 함수 선언부
@@ -137,14 +184,14 @@ private:
 	SOCKET listenSock;
 	HANDLE hCp;
 	ULONG sessionIdCnt;
-	Session** sessionArr;
+	Session* sessionArr;
 
 	CLockFreeStack<USHORT> indexStack;
 
 	HANDLE* iocpWorkerHandleArr;
 	HANDLE acceptThreadHandle;
 
-	int sessionArrSize;
+	int numOfMaxSession;
 };
 
 class CLanClient

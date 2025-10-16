@@ -25,6 +25,15 @@ bool CMyServer::OnConnectionRequest(SOCKADDR_IN* requestAdr)
 }
 void CMyServer::OnAccept(SOCKADDR_IN* clnAdr, ULONGLONG sessionId)
 {
+	/*CPacket* packet = CPacket::sendCPacketPool.allocObject();
+	packet->Clear();
+	st_PacketHeader header;
+	header.payloadLen = 8;
+	ULONGLONG message = 0x7fffffffffffffff;
+	packet->PutData((char*)&header, sizeof(header));
+	packet->PutData((char*)&message, sizeof(ULONGLONG));
+	SendPacket(sessionId, packet);*/
+
 	return;
 }
 
@@ -42,5 +51,4 @@ void CMyServer::OnMessage(ULONGLONG sessionId, CPacket* message)
 	ULONGLONG echoData;
 	*message >> echoData;
 	echo->NetPacketProc_Echo(sessionId, echoData);
-
 }
