@@ -57,7 +57,7 @@ public:
 			recvQ = nullptr;
 			isSending = false;
 			bDisconnect = false;
-			bRecvRST = false; // 디버깅용
+			bRecvRST = false;
 			refCount = 0;
 			sendPacketCount = 0;
 		}
@@ -106,7 +106,7 @@ public:
 		LONG isSending;
 		LONG bDisconnect;
 		ULONG refCount;
-		ULONG bRecvRST;
+		ULONG bRecvRST;  // 디버깅용
 
 		//--------------------------------------------------------
 		// Zero Copy(TCP 송수신 관점이 아닌 데이터 복사 관점)를 위한 부분

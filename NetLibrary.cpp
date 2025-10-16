@@ -186,8 +186,6 @@ unsigned int CLanServer::IOCPWorkerProc(void* arg)
 		// ------------------------------------------
 		if (transferred == 0)
 		{
-			session->bRecvRST = true;
-			//InterlockedExchange(&session->bDisconnect, true);
 			ULONG refCount = InterlockedDecrement(&session->refCount);
 			_LOG(dfLOG_LEVEL_ERROR, L"id : %016llx / Completion port - Transferred = 0 / Decrement RefCount = %d\n", session->sessionId, refCount);
 			if (refCount == 0)
@@ -254,7 +252,6 @@ unsigned int CLanServer::IOCPWorkerProc(void* arg)
 		_LOG(dfLOG_LEVEL_ERROR, L"id : %016llx / Completion port - AfterRoutine / Decrement RefCount = %d\n", session->sessionId, refCount);
 		if (refCount == 0)
 		{
-			//InterlockedExchange(&session->bDisconnect, true);
 			core->ReleaseSession(session);
 		}
 		PRO_END("CompletionRoutine");
@@ -381,7 +378,7 @@ void CLanServer::RecvPost(Session* session)
 	{
 		// recvQ가 가득찬 상황은 설계된 메시지 크기를 초과한 메시지가 온 것
 		// - 연결 종료로 대처
-		//InterlockedExchange(&session->bDisconnect, true);
+		InterlockedExchange(&session->bDisconnect, true);
 		ULONG refCount = InterlockedDecrement(&session->refCount);
 		_LOG(dfLOG_LEVEL_ERROR, L"session id : %016llx / recvQ is Full / Decrement RefCount = %d \n", session->sessionId, refCount);
 		if (refCount == 0)
@@ -403,13 +400,10 @@ void CLanServer::RecvPost(Session* session)
 		}
 		else
 		{
-			//InterlockedExchange(&session->bDisconnect, true);
 			ULONG refCount = InterlockedDecrement(&session->refCount);
 			_LOG(dfLOG_LEVEL_ERROR, L"id : %016llx  / RecvError / errorCode = %d / Decrement RefCount = %d)! \n", session->sessionId, error, refCount);
 			if (refCount == 0)
 				ReleaseSession(session);
-
-			session->bRecvRST = true;
 		}
 	}
 
@@ -466,7 +460,7 @@ void CLanServer::SendPost(Session* session, bool bCallFromSendPacket)
 	if (sendQSize > MAXSENDPACKETCOUNT)
 	{
 		_LOG(dfLOG_LEVEL_ERROR, L"packetCount overflow / id : %016llx------------\n", session->sessionId);
-		//InterlockedExchange(&session->bDisconnect, true);
+		InterlockedExchange(&session->bDisconnect, true);
 		ULONG refCount = InterlockedDecrement(&session->refCount);
 		_LOG(dfLOG_LEVEL_ERROR, L"id : %016llx  / SendPost PacketCountOverflow / Decrement RefCount = %d)! \n", session->sessionId, refCount);
 		if (refCount == 0)
@@ -540,12 +534,10 @@ void CLanServer::SendPost(Session* session, bool bCallFromSendPacket)
 		}
 		else
 		{
-			//InterlockedExchange(&session->bDisconnect, true);
 			ULONG refCount = InterlockedDecrement(&session->refCount);
 			_LOG(dfLOG_LEVEL_ERROR, L"id : %016llx  / SendError / errorCode = %d / Decrement RefCount = %d)! \n", session->sessionId, error, refCount);
 			if (refCount == 0)
 				ReleaseSession(session);
-			session->bRecvRST = true;
 		}
 	}
 	PRO_END("SendPost");
