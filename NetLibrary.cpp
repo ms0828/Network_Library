@@ -14,7 +14,7 @@ CLanServer::CLanServer()
 	iocpWorkerHandleArr = nullptr;
 	acceptThreadHandle = nullptr;
 
-	InitLog(dfLOG_LEVEL_ERROR, ELogMode::FILE_DIRECT);
+	InitLog(dfLOG_LEVEL_SYSTEM, ELogMode::NOLOG);
 }
 
 CLanServer::~CLanServer()
@@ -69,7 +69,7 @@ bool CLanServer::Start(PCWSTR servIp, USHORT servPort, ULONG numOfWorkerThread, 
 	// 디버그용 스레드
 	// - 5초에 한 번씩 세션 배열을 순회하며 InitSession 이후 5초 동안 Release되지 못한 세션이 있는지 검사
 	//-------------------
-	HANDLE debugingThread = (HANDLE)_beginthreadex(nullptr, 0, DebugThreadProc, this, 0, nullptr);
+	//HANDLE debugingThread = (HANDLE)_beginthreadex(nullptr, 0, DebugThreadProc, this, 0, nullptr);
 	
 
 	//----------------------------------------------------------
@@ -484,7 +484,7 @@ void CLanServer::SendPost(Session* session, bool bCallFromSendPacket)
 		if (session->sendLFQ->size > 0)
 			SendPost(session, false);
 
-		if (!bCallFromSendPacket)
+		if (bCallFromSendPacket)
 		{
 			ULONG refCount = InterlockedDecrement(&session->refCount);
 			_LOG(dfLOG_LEVEL_ERROR, L"id : %016llx  / SendPost(Call From SendPacket) LFQ size = 0 / Decrement RefCount = %d)! \n", session->sessionId, refCount);
@@ -498,7 +498,7 @@ void CLanServer::SendPost(Session* session, bool bCallFromSendPacket)
 		_LOG(dfLOG_LEVEL_SYSTEM, L"packetCount overflow / id : %016llx------------\n", session->sessionId);
 		InterlockedExchange(&session->bDisconnect, true);
 
-		if (!bCallFromSendPacket)
+		if (bCallFromSendPacket)
 		{
 			ULONG refCount = InterlockedDecrement(&session->refCount);
 			_LOG(dfLOG_LEVEL_ERROR, L"id : %016llx  / SendPost PacketCountOverflow / Decrement RefCount = %d)! \n", session->sessionId, refCount);
@@ -544,6 +544,14 @@ void CLanServer::SendPost(Session* session, bool bCallFromSendPacket)
 		InterlockedExchange(&session->isSending, false);
 		if (session->sendLFQ->size > 0)
 			SendPost(session, false);
+
+		if (bCallFromSendPacket)
+		{
+			ULONG refCount = InterlockedDecrement(&session->refCount);
+			_LOG(dfLOG_LEVEL_ERROR, L"id : %016llx  / SendPost PacketCountOverflow / Decrement RefCount = %d)! \n", session->sessionId, refCount);
+			if (refCount == 0)
+				ReleaseSession(session);
+		}
 		return;
 	}
 	
