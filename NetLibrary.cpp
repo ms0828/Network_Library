@@ -23,6 +23,28 @@ CLanServer::~CLanServer()
 	delete[] sessionArr;
 }
 
+HANDLE debugEvent;
+unsigned int CLanServer::DebugThreadProc(void* arg)
+{
+	debugEvent = CreateEvent(nullptr, false, false, nullptr);
+
+	CLanServer* core = static_cast<CLanServer*>(arg);
+	while (1)
+	{
+		WaitForSingleObject(debugEvent, 5000);
+		
+		
+		ULONG curTick = timeGetTime();
+		for (int i = 0; i < core->numOfMaxSession; i++)
+		{
+			ULONG dif = curTick - core->sessionArr[i].initTick;
+			if (dif > 5000 && core->sessionArr[i].sessionId != 0)
+				printf("not release session id = %d / arrIndex = %d\n", core->sessionArr[i].sessionId, i);
+		}
+		printf("----------------------------------\n");
+	}
+}
+
 bool CLanServer::Start(PCWSTR servIp, USHORT servPort, ULONG numOfWorkerThread, ULONG maxSessionNum)
 {
 	//----------------------------------------------------------
@@ -43,6 +65,12 @@ bool CLanServer::Start(PCWSTR servIp, USHORT servPort, ULONG numOfWorkerThread, 
 	for (int i = 0; i < numOfWorkerThread; i++)
 		iocpWorkerHandleArr[i] = (HANDLE)_beginthreadex(nullptr, 0, IOCPWorkerProc, this, 0, nullptr);
 
+	//-------------------
+	// 디버그용 스레드
+	// - 5초에 한 번씩 세션 배열을 순회하며 InitSession 이후 5초 동안 Release되지 못한 세션이 있는지 검사
+	//-------------------
+	HANDLE debugingThread = (HANDLE)_beginthreadex(nullptr, 0, DebugThreadProc, this, 0, nullptr);
+	
 
 	//----------------------------------------------------------
 	// 소켓 라이브러리 초기화
@@ -315,7 +343,7 @@ unsigned int CLanServer::AcceptProc(void* arg)
 		Session& newSession = core->sessionArr[arrIndex];
 		newSession.InitSession(clnSock, sessionId);
 		CreateIoCompletionPort((HANDLE)newSession.sock, core->hCp, (ULONG_PTR)newSession.sessionId, 0);
-		printf("Login : %016llx\n", newSession.sessionId);
+		//printf("Login : %016llx\n", newSession.sessionId);
 		_LOG(dfLOG_LEVEL_ERROR, L"id : %016llx / Login And Init / arrIndex = %d\n", sessionId, arrIndex);
 
 
@@ -380,7 +408,7 @@ void CLanServer::RecvPost(Session* session)
 		// - 연결 종료로 대처
 		InterlockedExchange(&session->bDisconnect, true);
 		ULONG refCount = InterlockedDecrement(&session->refCount);
-		_LOG(dfLOG_LEVEL_ERROR, L"session id : %016llx / recvQ is Full / Decrement RefCount = %d \n", session->sessionId, refCount);
+		_LOG(dfLOG_LEVEL_SYSTEM, L"session id : %016llx / recvQ is Full / Decrement RefCount = %d \n", session->sessionId, refCount);
 		if (refCount == 0)
 			ReleaseSession(session);
 		return;
@@ -455,16 +483,28 @@ void CLanServer::SendPost(Session* session, bool bCallFromSendPacket)
 		//------------------------------------------------------------------------------------------
 		if (session->sendLFQ->size > 0)
 			SendPost(session, false);
+
+		if (!bCallFromSendPacket)
+		{
+			ULONG refCount = InterlockedDecrement(&session->refCount);
+			_LOG(dfLOG_LEVEL_ERROR, L"id : %016llx  / SendPost(Call From SendPacket) LFQ size = 0 / Decrement RefCount = %d)! \n", session->sessionId, refCount);
+			if (refCount == 0)
+				ReleaseSession(session);
+		}
 		return;
 	}
 	if (sendQSize > MAXSENDPACKETCOUNT)
 	{
-		_LOG(dfLOG_LEVEL_ERROR, L"packetCount overflow / id : %016llx------------\n", session->sessionId);
+		_LOG(dfLOG_LEVEL_SYSTEM, L"packetCount overflow / id : %016llx------------\n", session->sessionId);
 		InterlockedExchange(&session->bDisconnect, true);
-		ULONG refCount = InterlockedDecrement(&session->refCount);
-		_LOG(dfLOG_LEVEL_ERROR, L"id : %016llx  / SendPost PacketCountOverflow / Decrement RefCount = %d)! \n", session->sessionId, refCount);
-		if (refCount == 0)
-			ReleaseSession(session);
+
+		if (!bCallFromSendPacket)
+		{
+			ULONG refCount = InterlockedDecrement(&session->refCount);
+			_LOG(dfLOG_LEVEL_ERROR, L"id : %016llx  / SendPost PacketCountOverflow / Decrement RefCount = %d)! \n", session->sessionId, refCount);
+			if (refCount == 0)
+				ReleaseSession(session);
+		}
 		return;
 	}
 

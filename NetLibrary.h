@@ -12,7 +12,7 @@
 #include "LockFreeStack.h"
 #include "Log.h"
 #pragma comment (lib, "ws2_32")
-
+#pragma comment(lib, "winmm.lib")
 
 #define MAXSENDPACKETCOUNT 300
 
@@ -57,7 +57,8 @@ public:
 			recvQ = nullptr;
 			isSending = false;
 			bDisconnect = false;
-			bRecvRST = false;
+			bRecvRST = false;  // 디버깅용
+			initTick = 0; // 디버깅용
 			refCount = 0;
 			sendPacketCount = 0;
 		}
@@ -88,7 +89,8 @@ public:
 			recvQ = nullptr;
 			isSending = false;
 			bDisconnect = false;
-			bRecvRST = false;
+			bRecvRST = false; // 디버깅용
+			initTick = timeGetTime();
 			sendPacketCount = 0;
 			sessionId = _id;
 			sock = _sock;
@@ -107,6 +109,8 @@ public:
 		LONG bDisconnect;
 		ULONG refCount;
 		ULONG bRecvRST;  // 디버깅용
+		ULONG initTick;  // 디버깅용
+
 
 		//--------------------------------------------------------
 		// Zero Copy(TCP 송수신 관점이 아닌 데이터 복사 관점)를 위한 부분
@@ -167,8 +171,9 @@ public:
 	// 스레드 함수 선언부
 	//----------------------------------------------------------
 	static unsigned int IOCPWorkerProc(void* arg);
+	static unsigned int DebugThreadProc(void* arg); // 디버깅용 스레드
 	static unsigned int AcceptProc(void* arg);
-
+	
 
 
 	//----------------------------------------------------------
