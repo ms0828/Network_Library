@@ -41,7 +41,8 @@ unsigned int CEcho::EchoThreadProc(void* arg)
 		packet->Clear();
 		packet->PutData((char*)&header, sizeof(header));
 		packet->PutData((char*)&message.data, sizeof(__int64));
-		core->SendPacket(message.sessionId, packet);
+		if (core->SendPacket(message.sessionId, packet) == false)
+			CPacket::sendCPacketPool.freeObject(packet);
 	}
 
 	return 0;

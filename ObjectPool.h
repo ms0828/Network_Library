@@ -27,6 +27,7 @@ public:
 		bPreConstructor = preConstructor;
 		top = nullptr;
 		poolCnt = 0;
+		useMemorySize = 0;
 	}
 
 	//------------------------------------------------------------
@@ -53,6 +54,7 @@ public:
 			}
 		}
 		poolCnt = poolNum;
+		useMemorySize = sizeof(T) * poolCnt;
 	}
 
 	~CObjectPool()
@@ -88,12 +90,15 @@ public:
 				newNode->seed = poolSeed;
 				newNode->next = nullptr;
 				new (newNode) T();
+				InterlockedAdd(&useMemorySize, sizeof(T));
 				return &(newNode->instance);
 			}
 			
 			nextTop = PackingNode(maskedT->next, GetNodeStamp(t) + 1);
 		} while (InterlockedCompareExchangePointer((void* volatile*)&top, nextTop, t) != t);
 		InterlockedDecrement(&poolCnt);
+		InterlockedAdd(&useMemorySize, sizeof(T));
+
 
 		//----------------------------------------
 		// bPreConstructor가 꺼져 있는 경우 할당마다 생성자가 호출
@@ -123,6 +128,7 @@ public:
 			nextTop = PackingNode(freeNode, GetNodeStamp(t) + 1);
 		} while (InterlockedCompareExchangePointer((void* volatile*)&top, nextTop, t) != t);
 		InterlockedIncrement(&poolCnt);
+		InterlockedAdd(&useMemorySize, -1 * sizeof(T));
 
 		if (!bPreConstructor)
 			objectPtr->~T();
@@ -149,12 +155,18 @@ public:
 		return (ULONGLONG)ptr >> stampShift;
 	}
 
+	inline LONG GetUseMemorySize()
+	{
+		return useMemorySize;
+	}
+
 private:
 	Node* top;
 	bool bPreConstructor;
 	USHORT poolSeed;
 	ULONG poolCnt;
 
+	volatile LONG useMemorySize;
 
 	//--------------------------------------------
 	// Node*의 하위 47비트 추출할 마스크

@@ -32,7 +32,8 @@ void CMyServer::OnAccept(SOCKADDR_IN* clnAdr, ULONGLONG sessionId)
 	ULONGLONG message = 0x7fffffffffffffff;
 	packet->PutData((char*)&header, sizeof(header));
 	packet->PutData((char*)&message, sizeof(ULONGLONG));
-	SendPacket(sessionId, packet);
+	if (SendPacket(sessionId, packet) == false)
+		CPacket::sendCPacketPool.freeObject(packet);
 
 	return;
 }

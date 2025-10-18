@@ -33,14 +33,16 @@ unsigned int CLanServer::DebugThreadProc(void* arg)
 	{
 		WaitForSingleObject(debugEvent, 5000);
 		
-		
-		ULONG curTick = timeGetTime();
+		int useSizeLFQNode = 0;
+		int useSizeIndexStackNode = 0;
 		for (int i = 0; i < core->numOfMaxSession; i++)
 		{
-			ULONG dif = curTick - core->sessionArr[i].initTick;
-			if (dif > 5000 && core->sessionArr[i].sessionId != 0)
-				printf("not release session id = %d / arrIndex = %d\n", core->sessionArr[i].sessionId, i);
+			useSizeLFQNode += core->sessionArr[i].sendLFQ->nodePool.GetUseMemorySize();
 		}
+		printf("sendPacketPool useMemorySize = %d byte\n", CPacket::sendCPacketPool.GetUseMemorySize());
+		printf("recvPacketPool useMemorySize = %d byte\n", CPacket::recvCPacketPool.GetUseMemorySize());
+		printf("totalSendLFQNodePool useMemorySize = %d byte\n", useSizeLFQNode);
+		printf("IndexStackNode useMemorySize = %d byte\n", core->indexStack.nodePool.GetUseMemorySize());
 		printf("----------------------------------\n");
 	}
 }
@@ -69,7 +71,7 @@ bool CLanServer::Start(PCWSTR servIp, USHORT servPort, ULONG numOfWorkerThread, 
 	// 디버그용 스레드
 	// - 5초에 한 번씩 세션 배열을 순회하며 InitSession 이후 5초 동안 Release되지 못한 세션이 있는지 검사
 	//-------------------
-	//HANDLE debugingThread = (HANDLE)_beginthreadex(nullptr, 0, DebugThreadProc, this, 0, nullptr);
+	HANDLE debugingThread = (HANDLE)_beginthreadex(nullptr, 0, DebugThreadProc, this, 0, nullptr);
 	
 
 	//----------------------------------------------------------
@@ -261,11 +263,10 @@ unsigned int CLanServer::IOCPWorkerProc(void* arg)
 			//---------------------------------------------------------
 			_LOG(dfLOG_LEVEL_DEBUG, L"------------Session Id : %016llx / CompletionPort : Send  / transferred : %d------------\n", session->sessionId, transferred);
 			for (int i = 0; i < session->sendPacketCount; i++)
-			{
 				CPacket::sendCPacketPool.freeObject(session->freePacket[i]);
-			}
+			session->sendPacketCount = 0;
 			InterlockedExchange(&session->isSending, false);
-
+			
 			if(session->sendLFQ->size > 0)
 			{
 				core->SendPost(session, false);
@@ -530,6 +531,10 @@ void CLanServer::SendPost(Session* session, bool bCallFromSendPacket)
 		session->freePacket[i] = packet;
 		++sendPacketCount;
 	}
+
+	if (sendPacketCount != sendQSize) // 테스트용 (이 현상이 자주 있는지 확인하기 위해) (나중에 지우기)
+		__debugbreak();
+
 	session->sendPacketCount = sendPacketCount;
 	//------------------------------------------------------------------------------------------
 	// - 만약에 위 문제로 인해서 sendPacketCount가 0이라면 SendPost는 취소한다.
@@ -568,7 +573,7 @@ void CLanServer::SendPost(Session* session, bool bCallFromSendPacket)
 
 	memset(&session->sendOlp, 0, sizeof(WSAOVERLAPPED));
 	DWORD sendBytes;
-	int sendRet = WSASend(session->sock, wsaBufArr, sendQSize, &sendBytes, 0, (WSAOVERLAPPED*)&session->sendOlp, nullptr);
+	int sendRet = WSASend(session->sock, wsaBufArr, session->sendPacketCount, &sendBytes, 0, (WSAOVERLAPPED*)&session->sendOlp, nullptr);
 	if (sendRet == 0)
 	{
 		_LOG(dfLOG_LEVEL_DEBUG, L"Send (FAST I/O) / sendBytes : %d \n",sendBytes);
@@ -632,6 +637,26 @@ void CLanServer::ReleaseSession(Session* session)
 		_LOG(dfLOG_LEVEL_ERROR, L"id : %016llx / ReleaseSession With Not RST\n", session->sessionId);
 	else
 		_LOG(dfLOG_LEVEL_ERROR, L"id : %016llx / ReleaseSession\n", session->sessionId);
+
+
+	//-----------------------------------------------------------------------
+	// 해당 세션에서 반납하지 못한 CPacket 반환
+	// - Dequeue되어 전송하지 못한 SendLFQ에 존재하는 CPacket
+	// - 반납되지 못한 Session의 freePacket에 존재하는 CPacket
+	// - WSARecv 호출에 실패하여 반납되지 못한 session->recvQ에 저장된 CPacket
+	//-----------------------------------------------------------------------
+	while (1)
+	{
+		CPacket* packet = nullptr;
+		if (session->sendLFQ->Dequeue(packet) == false)
+			break;
+		CPacket::sendCPacketPool.freeObject(packet);
+	};
+	for (int i = 0; i < session->sendPacketCount; i++)
+		CPacket::sendCPacketPool.freeObject(session->freePacket[i]);
+	
+	if (session->recvQ != nullptr)
+		CPacket::recvCPacketPool.freeObject(session->recvQ);
 
 
 	//------------------------------------------------------------------------

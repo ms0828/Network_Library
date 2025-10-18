@@ -76,12 +76,6 @@ public:
 		void InitSession(SOCKET _sock, ULONGLONG _id)
 		{	
 			InterlockedIncrement(&refCount);
-			while (1)
-			{
-				CPacket* packet;
-				if (sendLFQ->Dequeue(packet) == false)
-					break;
-			};
 			recvOlp.type = ERecv;
 			memset(&recvOlp, 0, sizeof(WSAOVERLAPPED));
 			sendOlp.type = ESend;
@@ -90,7 +84,7 @@ public:
 			isSending = false;
 			bDisconnect = false;
 			bRecvRST = false; // µð¹ö±ë¿ë
-			initTick = timeGetTime();
+			initTick = timeGetTime(); // µð¹ö±ë¿ë
 			sendPacketCount = 0;
 			sessionId = _id;
 			sock = _sock;
@@ -190,7 +184,6 @@ private:
 	HANDLE hCp;
 	ULONG sessionIdCnt;
 	Session* sessionArr;
-
 	CLockFreeStack<USHORT> indexStack;
 
 	HANDLE* iocpWorkerHandleArr;
