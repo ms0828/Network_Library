@@ -24,20 +24,18 @@ do{                                    \
 } while (0)                            \
 
 
-
 enum ELogMode
 {
     NOLOG = 0,
     CONSOLE,
     FILE_DIRECT,
 };
-extern ELogMode g_LogMode;
+
 
 //----------------------------------------------
 // 로그 출력 모드에 따른 리소스 초기화
 //----------------------------------------------
 bool InitLog(int logLevel, ELogMode logMode);
-
 
 //----------------------------------------------
 // 로그 출력 모드에 따른 로그 출력
@@ -45,3 +43,4 @@ bool InitLog(int logLevel, ELogMode logMode);
 void Log(int level, const wchar_t* fmt, ...);
 
 
+bool CloseLog();

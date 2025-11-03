@@ -2,7 +2,7 @@
 #include <Windows.h>
 
 class CRingBuffer;
-class CMyServer;
+class CEchoServer;
 class CPacket;
 class CEcho;
 
@@ -14,7 +14,7 @@ struct st_JobMessage
 
 struct st_EchoContext
 {
-	CMyServer* core;
+	CEchoServer* core;
 	CEcho* echo;
 };
 

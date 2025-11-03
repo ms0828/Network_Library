@@ -16,6 +16,10 @@
 
 #define MAXSENDPACKETCOUNT 300
 
+#define dfSendPacketSize 1024
+#define dfRecvPacketSize 4096
+
+
 class CPacket;
 class CRingBuffer;
 
@@ -165,9 +169,8 @@ public:
 	// 스레드 함수 선언부
 	//----------------------------------------------------------
 	static unsigned int IOCPWorkerProc(void* arg);
-	static unsigned int DebugThreadProc(void* arg); // 디버깅용 스레드
 	static unsigned int AcceptProc(void* arg);
-	
+	static unsigned int MonitoringThreadProc(void* arg);
 
 
 	//----------------------------------------------------------
@@ -177,19 +180,63 @@ public:
 	virtual void OnAccept(SOCKADDR_IN* clnAdr, ULONGLONG sessionId) = 0;
 	virtual void OnRelease(ULONGLONG sessionId) = 0;
 	virtual void OnMessage(ULONGLONG sessionId, CPacket* message) = 0;
+	virtual void OnMonitoring() = 0;
 
+
+
+	//----------------------------------------------------------
+	// 모니터링 관련 함수 선언부
+	//----------------------------------------------------------
+	inline ULONG GetAcceptTPS()
+	{
+		ULONG ret = acceptTPS;
+		acceptTPS = 0;
+		return ret;
+	}
+	inline ULONG GetRecvMessageTPS()
+	{
+		ULONG ret = recvMessageTPS;
+		recvMessageTPS = 0;
+		return ret;
+	}
+	inline ULONG GetSendMessageTPS()
+	{
+		ULONG ret = sendMessageTPS;
+		sendMessageTPS = 0;
+		return ret;
+	}
+	
 
 private:
 	SOCKET listenSock;
 	HANDLE hCp;
+
+
+	//-------------------------------
+	// 세션 관련
+	//-------------------------------
 	ULONG sessionIdCnt;
 	Session* sessionArr;
 	CLockFreeStack<USHORT> indexStack;
+	int numOfMaxSession;
 
+
+	//-------------------------------
+	// 스레드 관련
+	//-------------------------------
 	HANDLE* iocpWorkerHandleArr;
 	HANDLE acceptThreadHandle;
+	HANDLE monitoringThreadHandle;
 
-	int numOfMaxSession;
+	HANDLE shutdownEvent;
+
+	//-------------------------------
+	// 모니터링 관련
+	//-------------------------------
+	ULONG acceptTPS;
+	ULONG recvMessageTPS;
+	ULONG sendMessageTPS;
+	
 };
 
 class CLanClient

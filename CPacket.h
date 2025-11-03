@@ -1,21 +1,15 @@
 #pragma once
-#include "ObjectPool.h"
 #include "Windows.h"
+#include "ObjectPool_TLS.h"
+#include "ObjectPool_LF.h"
 
-#define DEFAULT_BUFSIZE 40000
+#define DEFAULT_BUFSIZE 4000
 
-//------------------------------------
-// ObjectPool 사용을 위한 Creator 
-//------------------------------------
-template<typename T>
-struct CreatorPacket
-{
-	int bufSize;
-	void operator()(T* place) const
-	{
-		new (place) T(bufSize);
-	}
-};
+template <typename T>
+class CObjectPool_TLS;
+
+template <typename T>
+class CObjectPool_LF;
 
 class CPacket
 {
@@ -171,7 +165,10 @@ private:
 	int	useSize;
 
 public:
-	static CObjectPool<CPacket> sendCPacketPool;
-	static CObjectPool<CPacket> recvCPacketPool;
+	//static CObjectPool_LF<CPacket> sendPacketPool;
+	//static CObjectPool_LF<CPacket> recvPacketPool;
+
+	static CObjectPool_TLS<CPacket> sendPacketPool;
+	static CObjectPool_TLS<CPacket> recvPacketPool;
 };
 

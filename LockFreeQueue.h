@@ -1,6 +1,6 @@
 #pragma once
 #include <Windows.h>
-#include "ObjectPool.h"
+#include "ObjectPool_LF.h"
 
 
 //-----------------------------------------------------
@@ -162,6 +162,6 @@ public:
 	static const ULONGLONG nodeMask = (1ULL << 47) - 1;
 	static const ULONG stampShift = 47;
 
-	CObjectPool<CLockFreeQueue::Node> nodePool;
+	CObjectPool_LF<CLockFreeQueue::Node> nodePool;
 
 };

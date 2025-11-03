@@ -3,8 +3,12 @@
 #include "CPacket.h"
 
 
-CObjectPool<CPacket> CPacket::recvCPacketPool(true);
-CObjectPool<CPacket> CPacket::sendCPacketPool(true);
+//CObjectPool_LF<CPacket> CPacket::recvPacketPool(true);
+//CObjectPool_LF<CPacket> CPacket::sendPacketPool(true);
+
+CObjectPool_TLS<CPacket> CPacket::recvPacketPool(true);
+CObjectPool_TLS<CPacket> CPacket::sendPacketPool(true);
+
 
 CPacket::CPacket()
 {

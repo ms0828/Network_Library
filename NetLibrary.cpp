@@ -1,6 +1,5 @@
 #include "NetLibrary.h"
 #include "CPacket.h"
-#include "ObjectPool.h"
 #include "Log.h"
 
 
@@ -11,8 +10,16 @@ CLanServer::CLanServer()
 	sessionArr = nullptr;
 	sessionIdCnt = 1;
 	numOfMaxSession = 0;
+
 	iocpWorkerHandleArr = nullptr;
 	acceptThreadHandle = nullptr;
+	monitoringThreadHandle = nullptr;
+
+	shutdownEvent = CreateEvent(nullptr, true, false, nullptr);
+
+	acceptTPS = 0;
+	recvMessageTPS = 0;
+	sendMessageTPS = 0;
 
 	InitLog(dfLOG_LEVEL_SYSTEM, ELogMode::NOLOG);
 }
@@ -21,30 +28,8 @@ CLanServer::~CLanServer()
 {
 	delete[] iocpWorkerHandleArr;
 	delete[] sessionArr;
-}
 
-HANDLE debugEvent;
-unsigned int CLanServer::DebugThreadProc(void* arg)
-{
-	debugEvent = CreateEvent(nullptr, false, false, nullptr);
-
-	CLanServer* core = static_cast<CLanServer*>(arg);
-	while (1)
-	{
-		WaitForSingleObject(debugEvent, 5000);
-		
-		int useSizeLFQNode = 0;
-		int useSizeIndexStackNode = 0;
-		for (int i = 0; i < core->numOfMaxSession; i++)
-		{
-			useSizeLFQNode += core->sessionArr[i].sendLFQ->nodePool.GetUseMemorySize();
-		}
-		printf("sendPacketPool useMemorySize = %d byte\n", CPacket::sendCPacketPool.GetUseMemorySize());
-		printf("recvPacketPool useMemorySize = %d byte\n", CPacket::recvCPacketPool.GetUseMemorySize());
-		printf("totalSendLFQNodePool useMemorySize = %d byte\n", useSizeLFQNode);
-		printf("IndexStackNode useMemorySize = %d byte\n", core->indexStack.nodePool.GetUseMemorySize());
-		printf("----------------------------------\n");
-	}
+	CloseLog();
 }
 
 bool CLanServer::Start(PCWSTR servIp, USHORT servPort, ULONG numOfWorkerThread, ULONG maxSessionNum)
@@ -68,11 +53,9 @@ bool CLanServer::Start(PCWSTR servIp, USHORT servPort, ULONG numOfWorkerThread, 
 		iocpWorkerHandleArr[i] = (HANDLE)_beginthreadex(nullptr, 0, IOCPWorkerProc, this, 0, nullptr);
 
 	//-------------------
-	// 디버그용 스레드
-	// - 5초에 한 번씩 세션 배열을 순회하며 InitSession 이후 5초 동안 Release되지 못한 세션이 있는지 검사
+	// 모니터링 스레드
 	//-------------------
-	HANDLE debugingThread = (HANDLE)_beginthreadex(nullptr, 0, DebugThreadProc, this, 0, nullptr);
-	
+	monitoringThreadHandle = (HANDLE)_beginthreadex(nullptr, 0, MonitoringThreadProc, this, 0, nullptr);
 
 	//----------------------------------------------------------
 	// 소켓 라이브러리 초기화
@@ -244,6 +227,7 @@ unsigned int CLanServer::IOCPWorkerProc(void* arg)
 					break;
 				session->recvQ->MoveReadPos(sizeof(header));
 				core->OnMessage(session->sessionId, session->recvQ);
+				InterlockedIncrement(&core->recvMessageTPS);
 			}
 
 			// ------------------------------------------
@@ -263,7 +247,7 @@ unsigned int CLanServer::IOCPWorkerProc(void* arg)
 			//---------------------------------------------------------
 			_LOG(dfLOG_LEVEL_DEBUG, L"------------Session Id : %016llx / CompletionPort : Send  / transferred : %d------------\n", session->sessionId, transferred);
 			for (int i = 0; i < session->sendPacketCount; i++)
-				CPacket::sendCPacketPool.freeObject(session->freePacket[i]);
+				CPacket::sendPacketPool.freeObject(session->freePacket[i]);
 			session->sendPacketCount = 0;
 			InterlockedExchange(&session->isSending, false);
 			
@@ -322,7 +306,7 @@ unsigned int CLanServer::AcceptProc(void* arg)
 		bool ret = core->indexStack.Pop((USHORT&)arrIndex);
 		if (ret == false)
 		{
-			_LOG(dfLOG_LEVEL_ERROR, L"error : indexStack Pop Fail  -- stackSize = %d\n", core->indexStack.stackSize);
+			_LOG(dfLOG_LEVEL_ERROR, L"error : indexStack Pop Fail  -- stackSize = %d\n", core->indexStack.GetSize());
 			closesocket(clnSock);
 			continue;
 		}
@@ -344,7 +328,6 @@ unsigned int CLanServer::AcceptProc(void* arg)
 		Session& newSession = core->sessionArr[arrIndex];
 		newSession.InitSession(clnSock, sessionId);
 		CreateIoCompletionPort((HANDLE)newSession.sock, core->hCp, (ULONG_PTR)newSession.sessionId, 0);
-		//printf("Login : %016llx\n", newSession.sessionId);
 		_LOG(dfLOG_LEVEL_ERROR, L"id : %016llx / Login And Init / arrIndex = %d\n", sessionId, arrIndex);
 
 
@@ -353,9 +336,11 @@ unsigned int CLanServer::AcceptProc(void* arg)
 		//------------------------------------------------------
 		core->OnAccept(&clnAdr, newSession.sessionId);
 		core->RecvPost(&newSession);
+		core->acceptTPS++;
 	}
 	return 0;
 }
+
 
 void CLanServer::RecvPost(Session* session)
 {
@@ -383,13 +368,13 @@ void CLanServer::RecvPost(Session* session)
 	//  - 이전 recvQ(CPacket)에 미완성된 데이터가 있다면 현재 할당한 recvQ(CPacket)로 옮기기
 	// 2. 해당 session에 할당 받은 recvQ(CPacket) 포인터 등록
 	//-------------------------------------------------------------------
-	CPacket* newRecvQ = CPacket::recvCPacketPool.allocObject();
+	CPacket* newRecvQ = CPacket::recvPacketPool.allocObject(dfRecvPacketSize);
 	newRecvQ->Clear();
 	if (session->recvQ != nullptr)
 	{
 		if (session->recvQ->GetDataSize() > 0)
 			int putRet = newRecvQ->PutData(session->recvQ->GetReadPtr(), session->recvQ->GetDataSize());
-		CPacket::recvCPacketPool.freeObject(session->recvQ);
+		CPacket::recvPacketPool.freeObject(session->recvQ);
 	}
 	session->recvQ = newRecvQ;
 
@@ -602,12 +587,17 @@ bool CLanServer::SendPacket(ULONGLONG sessionId, CPacket* packet)
 {
 	PRO_BEGIN("SendPacket");
 
+	InterlockedIncrement(&sendMessageTPS);
+
 	//-----------------------------------------------
 	// 세션 검색 및 세션 확보
 	//-----------------------------------------------
 	Session* session = AcquireSessionById(sessionId);
 	if (session == nullptr)
+	{
+		CPacket::sendPacketPool.freeObject(packet);
 		return false;
+	}
 
 
 	//-------------------------------------------------------
@@ -650,13 +640,13 @@ void CLanServer::ReleaseSession(Session* session)
 		CPacket* packet = nullptr;
 		if (session->sendLFQ->Dequeue(packet) == false)
 			break;
-		CPacket::sendCPacketPool.freeObject(packet);
+		CPacket::sendPacketPool.freeObject(packet);
 	};
 	for (int i = 0; i < session->sendPacketCount; i++)
-		CPacket::sendCPacketPool.freeObject(session->freePacket[i]);
+		CPacket::sendPacketPool.freeObject(session->freePacket[i]);
 	
 	if (session->recvQ != nullptr)
-		CPacket::recvCPacketPool.freeObject(session->recvQ);
+		CPacket::recvPacketPool.freeObject(session->recvQ);
 
 
 	//------------------------------------------------------------------------
@@ -746,4 +736,19 @@ CLanServer::Session* CLanServer::FindSessionById(ULONGLONG sessionId)
 	}
 
 	return session;
+}
+
+
+unsigned int CLanServer::MonitoringThreadProc(void* arg)
+{
+	CLanServer* core = static_cast<CLanServer*>(arg);
+
+	while (1)
+	{
+		WaitForSingleObject(core->shutdownEvent, 1000);
+
+		core->OnMonitoring();
+	}
+
+	return 0;
 }

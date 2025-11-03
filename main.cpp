@@ -1,32 +1,50 @@
 #include <iostream>
 #include <conio.h>
-#include "CMyServer.h"
+#include "CEchoServer.h"
 #include <Windows.h>
 #include "Log.h"
+#include "CPacket.h"
 
 using namespace std;
 
 int main()
 {
-	CMyServer server;
+	CEchoServer server;
 	server.Start(L"0.0.0.0", 6000, 5, 5000);
 	
-	while (1)
+
+	DWORD sPressedTick = 0;
+	BOOL waitingForS = FALSE;
+	while (true)
 	{
+		// 1) r키를 누르면 프로파일링 리셋
 		if (_kbhit())
 		{
-			WCHAR ControlKey = _getwch();
+			int ch = _getch();
 
-			if (ControlKey == L's' || ControlKey == L'S')
-			{
-				ProfileDataOutText("profile.txt");
-			}
-			if (ControlKey == L'c' || ControlKey == L'C')
+			if (ch == 's' || ch == 'S')
 			{
 				ProfileReset();
+				printf("ProfileReset And Start Profile\n");
+				waitingForS = TRUE;
+				sPressedTick = GetTickCount64();
 			}
+			else if (ch == 27) // ESC 키로 종료
+			{
+				break;
+			}
+		}
 
+		// 2) s키 누르고 5초 후 프로파일링 저장
+		if (waitingForS)
+		{
+			DWORD now = GetTickCount64();
+			if (now - sPressedTick >= 10000)
+			{
+				ProfileDataOutText("Profile_TLS_100.txt");
+				printf("ProfileDataOutText\n");
+				waitingForS = FALSE;
+			}
 		}
 	}
-
 }

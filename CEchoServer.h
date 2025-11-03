@@ -3,18 +3,18 @@
 #include "CEchoTest.h"
 
 
-class CMyServer : public CLanServer
+class CEchoServer : public CLanServer
 {
 public:
-	CMyServer();
-	~CMyServer();
+	CEchoServer();
+	~CEchoServer();
 
 public:
 	virtual bool OnConnectionRequest(SOCKADDR_IN* requestAdr);
 	virtual void OnAccept(SOCKADDR_IN* clnAdr, ULONGLONG sessionId);
 	virtual void OnRelease(ULONGLONG sessionId);
 	virtual void OnMessage(ULONGLONG sessionId, CPacket* message);
-
+	virtual void OnMonitoring();
 
 private:
 	CEcho* echo;

@@ -1,4 +1,4 @@
-#include "CMyServer.h"
+#include "CEchoServer.h"
 #include "RingBuffer.h"
 #include "CPacket.h"
 #include "CEchoTest.h"
@@ -19,7 +19,7 @@ CEcho::~CEcho()
 unsigned int CEcho::EchoThreadProc(void* arg)
 {
 	st_EchoContext* context = static_cast<st_EchoContext*>(arg);
-	CMyServer* core = context->core;
+	CEchoServer* core = context->core;
 	CEcho* echo = context->echo;
 	while (1)
 	{
@@ -37,12 +37,11 @@ unsigned int CEcho::EchoThreadProc(void* arg)
 		header.payloadLen = sizeof(message.data);
 		
 
-		CPacket* packet = CPacket::sendCPacketPool.allocObject();
+		CPacket* packet = CPacket::sendPacketPool.allocObject(dfSendPacketSize);
 		packet->Clear();
 		packet->PutData((char*)&header, sizeof(header));
 		packet->PutData((char*)&message.data, sizeof(__int64));
-		if (core->SendPacket(message.sessionId, packet) == false)
-			CPacket::sendCPacketPool.freeObject(packet);
+		core->SendPacket(message.sessionId, packet);
 	}
 
 	return 0;
