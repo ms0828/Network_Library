@@ -5,17 +5,18 @@ using namespace std;
 
 CEchoServer::CEchoServer()
 {
-	echo = new CEcho;
-	echoContext = new st_EchoContext;
-	echoContext->core = this;
-	echoContext->echo = echo;
-	echoThreadHandle = (HANDLE)_beginthreadex(nullptr, 0, CEcho::EchoThreadProc, echoContext, 0, nullptr);
+	jobQ = new CRingBuffer(400000);
+	jobEvent = CreateEvent(nullptr, false, false, nullptr);
+	InitializeSRWLock(&jogQLock);
+
+	echoThreadHandle = (HANDLE)_beginthreadex(nullptr, 0, CEchoServer::EchoThreadProc, this, 0, nullptr);
 }
 
 CEchoServer::~CEchoServer()
 {
-	delete echo;
-	delete echoContext;
+	delete jobQ;
+	CloseHandle(jobEvent);
+	CloseHandle(echoThreadHandle);
 }
 
 
@@ -51,7 +52,7 @@ void CEchoServer::OnMessage(ULONGLONG sessionId, CPacket* message)
 	//------------------------------------------------------------
 	ULONGLONG echoData;
 	*message >> echoData;
-	echo->NetPacketProc_Echo(sessionId, echoData);
+	NetPacketProc_Echo(sessionId, echoData);
 }
 
 void CEchoServer::OnMonitoring()
@@ -70,4 +71,55 @@ void CEchoServer::OnMonitoring()
 }
 
 
+
+
+unsigned int CEchoServer::EchoThreadProc(void* arg)
+{
+	CEchoServer* core = static_cast<CEchoServer*>(arg);
+
+	while (1)
+	{
+		if (core->jobQ->GetUseSize() == 0)
+			WaitForSingleObject(core->jobEvent, INFINITE);
+
+		st_JobMessage message;
+		message.sessionId = 0;
+		message.data = 0;
+		int dequeueRet = core->jobQ->Dequeue((char*)&message, sizeof(st_JobMessage));
+		if (dequeueRet == 0)
+			continue;
+
+		st_PacketHeader header;
+		header.payloadLen = sizeof(message.data);
+
+
+		CPacket* packet = CPacket::sendPacketPool.allocObject(dfSendPacketSize);
+		packet->Clear();
+		packet->PutData((char*)&header, sizeof(header));
+		packet->PutData((char*)&message.data, sizeof(__int64));
+		core->SendPacket(message.sessionId, packet);
+	}
+
+	return 0;
+}
+
+void CEchoServer::NetPacketProc_Echo(ULONGLONG sessionId, ULONGLONG echoData)
+{
+	st_JobMessage jobMsg;
+	jobMsg.sessionId = sessionId;
+	jobMsg.data = echoData;
+
+	//-------------------------------------------------------------
+	// 에코(컨텐츠) 처리 스레드에게 작업 메시지를 생성 및 작업 큐에 인큐
+	//-------------------------------------------------------------
+	AcquireSRWLockExclusive(&jogQLock);
+	int enqueueRet = jobQ->Enqueue((char*)&jobMsg, sizeof(jobMsg));
+	ReleaseSRWLockExclusive(&jogQLock);
+	if (enqueueRet == 0)
+	{
+		_LOG(dfLOG_LEVEL_SYSTEM, L"JobQ is Full\n");
+		exit(1);
+	}
+	SetEvent(jobEvent);
+}
 

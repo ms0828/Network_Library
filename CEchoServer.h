@@ -1,7 +1,11 @@
 #pragma once
 #include "NetLibrary.h"
-#include "CEchoTest.h"
 
+struct st_JobMessage
+{
+	ULONGLONG sessionId;
+	ULONGLONG data;
+};
 
 class CEchoServer : public CLanServer
 {
@@ -16,8 +20,20 @@ public:
 	virtual void OnMessage(ULONGLONG sessionId, CPacket* message);
 	virtual void OnMonitoring();
 
+
+	//---------------------------------------------------------------
+	// 俊内 牧刨明 包访
+	//---------------------------------------------------------------
+	static unsigned int EchoThreadProc(void* arg);
+	void NetPacketProc_Echo(ULONGLONG sessionId, ULONGLONG echoData);
+
+
 private:
-	CEcho* echo;
-	st_EchoContext* echoContext;
+	//---------------------------------------------------------------
+	// 俊内 牧刨明 包访
+	//---------------------------------------------------------------
 	HANDLE echoThreadHandle;
+	CRingBuffer* jobQ;
+	SRWLOCK jogQLock;
+	HANDLE jobEvent;
 };

@@ -125,7 +125,6 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="CEchoServer.cpp" />
-    <ClCompile Include="CEchoTest.cpp" />
     <ClCompile Include="CPacket.cpp" />
     <ClCompile Include="Log.cpp" />
     <ClCompile Include="main.cpp" />
@@ -135,7 +134,6 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="CEchoServer.h" />
-    <ClInclude Include="CEchoTest.h" />
     <ClInclude Include="CPacket.h" />
     <ClInclude Include="LockFreeQueue.h" />
     <ClInclude Include="LockFreeStack.h" />

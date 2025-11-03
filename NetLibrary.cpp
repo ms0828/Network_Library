@@ -745,7 +745,13 @@ unsigned int CLanServer::MonitoringThreadProc(void* arg)
 
 	while (1)
 	{
-		WaitForSingleObject(core->shutdownEvent, 1000);
+		DWORD ret = WaitForSingleObject(core->shutdownEvent, 1000);
+		if (ret == WAIT_OBJECT_0)
+		{
+			_LOG(dfLOG_LEVEL_SYSTEM, L"shutdown event is signal - MonitoringThread Exit!");
+			break;
+		}
+
 
 		core->OnMonitoring();
 	}

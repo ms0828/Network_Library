@@ -27,9 +27,6 @@
     <ClCompile Include="NetLibrary.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
-    <ClCompile Include="CEchoTest.cpp">
-      <Filter>소스 파일</Filter>
-    </ClCompile>
     <ClCompile Include="Profiler.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
@@ -48,9 +45,6 @@
       <Filter>헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="NetLibrary.h">
-      <Filter>헤더 파일</Filter>
-    </ClInclude>
-    <ClInclude Include="CEchoTest.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="Profiler.h">
