@@ -14,9 +14,9 @@ CEchoServer::CEchoServer()
 
 CEchoServer::~CEchoServer()
 {
-	delete jobQ;
 	CloseHandle(jobEvent);
 	CloseHandle(echoThreadHandle);
+	delete jobQ;
 }
 
 
@@ -71,16 +71,19 @@ void CEchoServer::OnMonitoring()
 }
 
 
-
-
 unsigned int CEchoServer::EchoThreadProc(void* arg)
 {
 	CEchoServer* core = static_cast<CEchoServer*>(arg);
+	HANDLE hEvents[2] = { core->shutdownEvent, core->jobEvent };
 
 	while (1)
 	{
 		if (core->jobQ->GetUseSize() == 0)
-			WaitForSingleObject(core->jobEvent, INFINITE);
+		{
+			DWORD ret = WaitForMultipleObjects(2, hEvents, false, INFINITE);
+			if (ret == WAIT_OBJECT_0)
+				break;
+		}
 
 		st_JobMessage message;
 		message.sessionId = 0;

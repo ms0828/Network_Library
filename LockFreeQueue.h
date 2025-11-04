@@ -30,6 +30,17 @@ public:
 		tail = head;
 	}
 	
+	~CLockFreeQueue()
+	{
+		while (1)
+		{
+			T popValue;
+			bool ret = Dequeue(popValue);
+			if (ret == false)
+				break;
+		}
+	}
+
 	void Enqueue(T data)
 	{
 		Node* newNode = nodePool.allocObject();

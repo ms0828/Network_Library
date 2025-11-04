@@ -23,6 +23,8 @@ int findProfileEntry(const char* szName)
 
 void ProfileBegin(const char* szName)
 {
+	if (gt_ProfileSampleArr == nullptr)
+		return;
 	int index = findProfileEntry(szName);
 	if (index == -1)
 	{
@@ -48,6 +50,9 @@ void ProfileBegin(const char* szName)
 
 void ProfileEnd(const char* szName)
 {
+	if (gt_ProfileSampleArr == nullptr)
+		return;
+
 	int index = findProfileEntry(szName);
 	if (index == -1)
 	{

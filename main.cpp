@@ -31,8 +31,19 @@ int main()
 			}
 			else if (ch == 27) // ESC 키로 종료
 			{
+				server.Stop();
 				break;
 			}
+			else if (ch == 'd' || ch == 'D')
+			{
+				for (int i = 0; i < server.numOfMaxSession; i++)
+				{
+					bool bConnect = !(server.sessionArr[i].refCount & (1 << 31));
+					if (bConnect)
+						server.DisconnectSession(server.sessionArr[i].sessionId);
+				}
+			}
+
 		}
 
 		// 2) s키 누르고 5초 후 프로파일링 저장
@@ -47,4 +58,6 @@ int main()
 			}
 		}
 	}
+
+	Sleep(1000);
 }

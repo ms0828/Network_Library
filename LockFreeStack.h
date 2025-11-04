@@ -34,12 +34,12 @@ public:
 
 	~CLockFreeStack()
 	{
-		Node* curNode = UnpackingNode(top);
-		while (curNode != nullptr)
+		while (1)
 		{
-			Node* deleteNode = curNode;
-			curNode = curNode->next;
-			delete deleteNode;
+			T popValue;
+			bool ret = Pop(popValue);
+			if (ret == false)
+				break;
 		}
 	}
 	

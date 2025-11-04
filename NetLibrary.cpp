@@ -14,14 +14,16 @@ CLanServer::CLanServer()
 	iocpWorkerHandleArr = nullptr;
 	acceptThreadHandle = nullptr;
 	monitoringThreadHandle = nullptr;
+	numOfWorkerThread = 0;
 
 	shutdownEvent = CreateEvent(nullptr, true, false, nullptr);
+
 
 	acceptTPS = 0;
 	recvMessageTPS = 0;
 	sendMessageTPS = 0;
 
-	InitLog(dfLOG_LEVEL_SYSTEM, ELogMode::NOLOG);
+	InitLog(dfLOG_LEVEL_ERROR, ELogMode::NOLOG);
 }
 
 CLanServer::~CLanServer()
@@ -32,12 +34,13 @@ CLanServer::~CLanServer()
 	CloseLog();
 }
 
-bool CLanServer::Start(PCWSTR servIp, USHORT servPort, ULONG numOfWorkerThread, ULONG maxSessionNum)
+bool CLanServer::Start(PCWSTR servIp, USHORT servPort, ULONG numOfWorker, ULONG maxSessionNum)
 {
 	//----------------------------------------------------------
 	// Session 배열 메모리 할당
 	//----------------------------------------------------------
 	numOfMaxSession = maxSessionNum;
+	numOfWorkerThread = numOfWorker;
 	sessionArr = new Session[numOfMaxSession]();
 	for(int i = numOfMaxSession - 1; i >= 0; i--)
 	{
@@ -129,14 +132,80 @@ bool CLanServer::Start(PCWSTR servIp, USHORT servPort, ULONG numOfWorkerThread, 
 	return true;
 }
 
+
+
+//-------------------------------------------------------
+// 1. 새로운 세션 접속 막기
+//	- closesocket(listenSock);
+// 2. 접속 중인 모든 세션 연결 끊기
+// 3. PQCS로 IOCP 워커 스레드 종료
+// 4. 컨텐츠 스레드 및 모니터링 스레드 종료
+//-------------------------------------------------------
 void CLanServer::Stop()
 {
+	closesocket(listenSock);
+	WaitForSingleObject(acceptThreadHandle, INFINITE);
 
+	for (int i = 0; i < numOfMaxSession; i++)
+	{
+		bool bConnect = !(sessionArr[i].refCount & (1 << 31));
+		if (bConnect)
+			DisconnectSession(sessionArr[i].sessionId);
+	}
+	
+	SetEvent(shutdownEvent);
+	
+	for (int i = 0; i < numOfWorkerThread; i++)
+		PostQueuedCompletionStatus(hCp, 0, (ULONG_PTR)nullptr, nullptr);
+
+	for (int i = 0; i < numOfWorkerThread; i++)
+		CloseHandle(iocpWorkerHandleArr[i]);
+	CloseHandle(acceptThreadHandle);
+	CloseHandle(monitoringThreadHandle);
 }
+
 
 bool CLanServer::DisconnectSession(ULONGLONG sessionId)
 {
-	return false;
+	//-----------------------------------------------
+	// 세션 검색 및 세션 확보(Ref Count 증가)
+	//-----------------------------------------------
+	Session* session = AcquireSessionById(sessionId);
+	if (session == nullptr)
+		return false;
+	
+	//-------------------------------------------------------
+	// 해당 세션의 Disconnect flag 활성화 및 PQCS 종료 신호 전달
+	//-------------------------------------------------------
+	InterlockedExchange(&session->bDisconnect, 1);
+
+	
+	//--------------------------------------------------------
+	// [[고민중인 것]]
+	// - 상대방이 recv IO PENDING이 걸려있다면, disconnect flag를 올려두어도 완료통지가 오지 않아 refCount가 1로 남아있게 된다.
+	// - 어떻게 이를 끊을 것인가?
+	// - shutdown을 써서 미완료 통지의 IO를 중단시키는 방법을 생각해봤으나, graceful shutdown을 진입하는 것이 마음에 들지 않는다.
+	// 
+	// [현재 방향] 
+	// 이 상황에서 상대방이 메시지를 하나라도 보내는 순간 상대방의 연결은 끊어질 것이다.
+	// - 상대방이 메시지를 보내지 않더라도 하트비트 프로토콜에 따라 일정 주기로 패킷을 전송할 것이므로, 연결 끊어짐을 기다리는 것을 선택하였다.
+	//
+	// (현재는 올바른 작동을 테스트하기 위해 shutdown을 수행) 
+	//--------------------------------------------------------
+	shutdown(session->sock, SD_BOTH);
+
+	
+
+	//-------------------------------------------------------
+	// 확보한 세션의 Ref Count 복구
+	//-------------------------------------------------------
+	ULONG refCount = InterlockedDecrement(&session->refCount);
+	_LOG(dfLOG_LEVEL_ERROR, L"id : %016llx  / DisconnectSession / Decrement RefCount = %d)! \n", session->sessionId, refCount);
+	if (refCount == 0)
+		ReleaseSession(session);
+
+
+	return true;
 }
 
 
@@ -176,7 +245,7 @@ unsigned int CLanServer::IOCPWorkerProc(void* arg)
 		//--------------------------------------------------------------
 		if (sessionOlp == nullptr)
 		{
-			_LOG(dfLOG_LEVEL_ERROR, L"overlapped null!!!!!!!!!!!!!!!!!!!!!!\n");
+			_LOG(dfLOG_LEVEL_SYSTEM, L"Completion Status - Overlapped is null!\n");
 			return 0;
 		}
 
@@ -262,7 +331,13 @@ unsigned int CLanServer::IOCPWorkerProc(void* arg)
 		// IOCount 감소 후, 세션 정리 시점 확인
 		// ----------------------------------------------------------------
 		ULONG refCount = InterlockedDecrement(&session->refCount);
-		_LOG(dfLOG_LEVEL_ERROR, L"id : %016llx / Completion port - AfterRoutine / Decrement RefCount = %d\n", session->sessionId, refCount);
+		
+		if(sessionOlp->type == ESend)
+			_LOG(dfLOG_LEVEL_ERROR, L"id : %016llx / Completion port - AfterRoutine [Send] / Decrement RefCount = %d\n", session->sessionId, refCount);
+		else
+			_LOG(dfLOG_LEVEL_ERROR, L"id : %016llx / Completion port - AfterRoutine [Recv] / Decrement RefCount = %d\n", session->sessionId, refCount);
+
+		
 		if (refCount == 0)
 		{
 			core->ReleaseSession(session);
@@ -687,7 +762,7 @@ CLanServer::Session* CLanServer::AcquireSessionById(ULONGLONG sessionId)
 	//-----------------------------------------------
 	ULONG refCount = InterlockedIncrement(&session->refCount);
 	_LOG(dfLOG_LEVEL_ERROR, L"id : %016llx  / arrIndex = %d / parameter id : %016llx / AcquireSessionById / Increment RefCount = %d)! \n", session->sessionId, arrIndex, sessionId, refCount);
-
+	
 	ULONG releaseFlag = session->refCount & (1 << 31);
 	if (releaseFlag)
 	{

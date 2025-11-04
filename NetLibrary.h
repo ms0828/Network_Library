@@ -64,6 +64,7 @@ public:
 			bRecvRST = false;  // 디버깅용
 			initTick = 0; // 디버깅용
 			refCount = 0;
+			refCount |= (1 << 31);
 			sendPacketCount = 0;
 		}
 		~Session()
@@ -144,7 +145,7 @@ public:
 	//-------------------------------------------------------
 	// 세션Id로 세션을 검색 및 세션에 대한 참조권 확보
 	// - 해당 세션을 검색 및 RefCount를 증가
-	// - 이 함수로 찾은 세션은 RefCount를 감소하기 전까지 세션이 바뀌지 않음을 보장할 수 있다.
+	// - 이 함수로 찾은 세션은 RefCount를 감소하기 전까지 Release 되지 않음을 보장
 	// 
 	// [nullptr을 반환하는 경우]
 	// - 찾으려는 세션이 없는 경우
@@ -208,9 +209,9 @@ public:
 	
 
 private:
+public:
 	SOCKET listenSock;
 	HANDLE hCp;
-
 
 	//-------------------------------
 	// 세션 관련
@@ -228,7 +229,10 @@ private:
 	HANDLE acceptThreadHandle;
 	HANDLE monitoringThreadHandle;
 
-	HANDLE shutdownEvent;
+	ULONG numOfWorkerThread;
+
+protected:
+	
 
 	//-------------------------------
 	// 모니터링 관련
@@ -236,7 +240,14 @@ private:
 	ULONG acceptTPS;
 	ULONG recvMessageTPS;
 	ULONG sendMessageTPS;
-	
+
+
+	//-------------------------------
+	// 종료 관련 이벤트
+	//-------------------------------
+	HANDLE shutdownEvent;
+
+
 };
 
 class CLanClient
