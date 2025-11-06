@@ -16,13 +16,8 @@
 
 #define MAXSENDPACKETCOUNT 300
 
-#define dfSendPacketSize 1024
-#define dfRecvPacketSize 4096
-
-
 class CPacket;
 class CRingBuffer;
-
 
 enum EIOTYPE
 {

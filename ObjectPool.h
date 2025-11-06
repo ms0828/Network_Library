@@ -19,7 +19,7 @@ class CObjectPool_ST;
 template<typename T, bool DebugMode>
 class CObjectPool_Lock;
 
-template<typename T, bool DebugMode>
+template<typename T, bool DebugMode, bool Profile>
 class CObjectPool_LF;
 
 template<typename T, bool DebugMode>
@@ -31,7 +31,7 @@ struct Node
 {
 	template<typename, bool> friend class CObjectPool_ST;
 	template<typename, bool> friend class CObjectPool_Lock;
-	template<typename, bool> friend class CObjectPool_LF;
+	template<typename, bool, bool> friend class CObjectPool_LF;
 	template<typename, bool> friend class CObjectPool_TLS;
 private:
 	ULONGLONG headFence;
@@ -43,11 +43,11 @@ private:
 
 
 
-template<typename T, bool DebugMode = false >
+template<typename T, bool DebugMode = false>
 class CObjectPool_ST
 {
 	template<typename, bool> friend class CObjectPool_Lock;
-	template<typename, bool> friend class CObjectPool_LF;
+	template<typename, bool, bool> friend class CObjectPool_LF;
 	template<typename, bool> friend class CObjectPool_TLS;
 
 public:
@@ -181,12 +181,12 @@ private:
 };
 
 
-template<typename T, bool DebugMode = false >
+template<typename T, bool DebugMode = false>
 class CObjectPool_Lock
 {
 	template<typename, bool> friend class CObjectPool_ST;
-	template<typename, bool> friend class CObjectPool_LF;
 	template<typename, bool> friend class CObjectPool_TLS;
+	template<typename, bool, bool> friend class CObjectPool_LF;
 
 public:
 	template<typename... Args>
@@ -327,7 +327,7 @@ private:
 
 
 
-template<typename T, bool DebugMode = false >
+template<typename T, bool DebugMode = false, bool Profile = false>
 class CObjectPool_LF
 {
 	template<typename, bool> friend class CObjectPool_ST;
@@ -383,7 +383,8 @@ public:
 	//---------------------------------------------------------------
 	T* allocObject()
 	{
-		PRO_BEGIN("LF_Alloc");
+		if constexpr (Profile)
+			PRO_BEGIN("LF_Alloc");
 
 		Node<T>* t;
 		Node<T>* nextTop;
@@ -394,6 +395,7 @@ public:
 			maskedT = UnpackingNode(t);
 			if (maskedT == nullptr)
 			{
+				PRO_BEGIN("LF_Alloc - pool empty! - create newNode");
 				Node<T>* newNode = (Node<T>*)malloc(sizeof(Node<T>));
 				newNode->headFence = dfFenceValue;
 				newNode->tailFence = dfFenceValue;
@@ -403,6 +405,7 @@ public:
 				T* instance = &newNode->instance;
 				creatorFunc(instance);
 				InterlockedIncrement(&allocCnt);
+				PRO_END("LF_Alloc - pool empty! - create newNode");
 				return instance;
 			}
 			nextTop = PackingNode(maskedT->next, GetNodeStamp(t) + 1);
@@ -414,8 +417,9 @@ public:
 		
 		InterlockedDecrement(&poolCnt);
 		InterlockedIncrement(&allocCnt);
-
-		PRO_END("LF_Alloc");
+		
+		if constexpr (Profile)
+			PRO_END("LF_Alloc");
 		return instance;
 	}
 
@@ -430,7 +434,8 @@ public:
 	//---------------------------------------------------------------
 	bool freeObject(T* objectPtr)
 	{
-		PRO_BEGIN("LF_Free");
+		if constexpr (Profile)
+			PRO_BEGIN("LF_Free");
 
 		Node<T>* freeNode;
 		int t1 = alignof(T);
@@ -476,7 +481,8 @@ public:
 		InterlockedIncrement(&poolCnt);
 		InterlockedDecrement(&allocCnt);
 
-		PRO_END("LF_Free");
+		if constexpr (Profile)
+			PRO_END("LF_Free");
 		return true;
 	}
 
@@ -503,12 +509,12 @@ private:
 };
 
 
-template<typename T, bool DebugMode = false >
+template<typename T, bool DebugMode = false>
 class CObjectPool_TLS
 {
 	template<typename, bool> friend class CObjectPool_ST;
 	template<typename, bool> friend class CObjectPool_Lock;
-	template<typename, bool> friend class CObjectPool_LF;
+	template<typename, bool, bool> friend class CObjectPool_LF;
 
 private:
 	class CChunk
@@ -591,8 +597,8 @@ public:
 		creatorFunc = [args...](void* instance)-> T* {
 			return new(instance) T(args...);
 		};
-		chunkPool = new CObjectPool_LF<CChunk, false>(true, poolNum, poolSeed, preConstructor, poolSeed, dfNumOfChunkObject, creatorFunc);
-		emptyChunkPool = new CObjectPool_LF<CChunk, false>(true, poolNum, poolSeed, preConstructor, poolSeed, 0, creatorFunc);
+		chunkPool = new CObjectPool_LF<CChunk, false, true>(true, poolNum, poolSeed, preConstructor, poolSeed, dfNumOfChunkObject, creatorFunc);
+		emptyChunkPool = new CObjectPool_LF<CChunk, false, true>(true, poolNum, poolSeed, preConstructor, poolSeed, 0, creatorFunc);
 	}
 	~CObjectPool_TLS()
 	{
@@ -615,10 +621,10 @@ public:
 		//--------------------------------------------------------------------------
 		if (localChunkPool->top == nullptr)
 		{
-			PRO_BEGIN("[Alloc Object] threadChunkPool is Empty - Public ChunkPool Alloc!");
+			PRO_BEGIN("[Alloc Object] threadChunkPool is Empty - Public ChunkPool Pop!");
 			CChunk* fullChunk = chunkPool->allocObject();
 			localChunkPool->freeObject(fullChunk);
-			PRO_END("[Alloc Object] threadChunkPool is Empty - Public ChunkPool Alloc!");
+			PRO_END("[Alloc Object] threadChunkPool is Empty - Public ChunkPool Pop!");
 		}	
 		CChunk* chunk = &localChunkPool->top->instance;
 
@@ -636,14 +642,14 @@ public:
 
 		if (chunk->GetNodeCnt() == 0)
 		{
-			PRO_BEGIN("[Alloc Object] after Alloc, Node is Empty - Public EmptyChunkPool Free!");
+			PRO_BEGIN("[Alloc Object] after Alloc, Node is Empty - Public EmptyChunkPool Push!");
 			CChunk* emptyChunk = localChunkPool->allocObject();
 			if (chunk != emptyChunk)
 				__debugbreak();
 			if (emptyChunk->GetNodeCnt() != 0)
 				__debugbreak();
 			emptyChunkPool->freeObject(emptyChunk);
-			PRO_END("[Alloc Object] after Alloc, Node is Empty - Public EmptyChunkPool Free!");
+			PRO_END("[Alloc Object] after Alloc, Node is Empty - Public EmptyChunkPool Push!");
 		}
 
 		PRO_END("TLS_Alloc");
@@ -773,6 +779,6 @@ private:
 	std::function<T*(void*)> creatorFunc;
 
 public:
-	CObjectPool_LF<CChunk, false>* chunkPool;
-	CObjectPool_LF<CChunk, false>* emptyChunkPool;
+	CObjectPool_LF<CChunk, false, true>* chunkPool;
+	CObjectPool_LF<CChunk, false, true>* emptyChunkPool;
 };

@@ -58,10 +58,10 @@ void CEchoServer::OnMessage(ULONGLONG sessionId, CPacket* message)
 void CEchoServer::OnMonitoring()
 {
 	printf("\n\n\n\n\n[CPacket]\n");
-	//printf("- sendPacketPool / Chunk Pool Cnt = %d\n", CPacket::sendPacketPool.chunkPool->GetPoolCnt());
-	//printf("- sendPacketPool / Empty Pool Cnt = %d\n", CPacket::sendPacketPool.emptyChunkPool->GetPoolCnt());
-	//printf("- recvPacketPool / Chunk Pool Cnt = %d\n", CPacket::recvPacketPool.chunkPool->GetPoolCnt());
-	//printf("- recvPacketPool / Empty Pool Cnt = %d\n", CPacket::recvPacketPool.emptyChunkPool->GetPoolCnt());
+	printf("- sendPacketPool / Chunk Pool Cnt = %d\n", CPacket::sendPacketPool.chunkPool->GetPoolCnt());
+	printf("- sendPacketPool / Empty Pool Cnt = %d\n", CPacket::sendPacketPool.emptyChunkPool->GetPoolCnt());
+	printf("- recvPacketPool / Chunk Pool Cnt = %d\n", CPacket::recvPacketPool.chunkPool->GetPoolCnt());
+	printf("- recvPacketPool / Empty Pool Cnt = %d\n", CPacket::recvPacketPool.emptyChunkPool->GetPoolCnt());
 	printf("\n");
 	printf("[TPS]\n");
 	printf("- accpetTPS = %d\n", GetAcceptTPS());

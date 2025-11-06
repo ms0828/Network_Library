@@ -7,7 +7,7 @@
 template <typename T, bool DebugMode>
 class CObjectPool_TLS;
 
-template <typename T, bool DebugMode>
+template <typename T, bool DebugMode, bool Profile>
 class CObjectPool_LF;
 
 class CPacket
@@ -164,10 +164,10 @@ private:
 	int	useSize;
 
 public:
-	//static CObjectPool_LF<CPacket> sendPacketPool;
-	//static CObjectPool_LF<CPacket> recvPacketPool;
+	//static CObjectPool_LF<CPacket, true> sendPacketPool;
+	//static CObjectPool_LF<CPacket, true> recvPacketPool;
 
-	static CObjectPool_TLS<CPacket> sendPacketPool;
-	static CObjectPool_TLS<CPacket> recvPacketPool;
+	static CObjectPool_TLS<CPacket, true> sendPacketPool;
+	static CObjectPool_TLS<CPacket, true> recvPacketPool;
 };
 
