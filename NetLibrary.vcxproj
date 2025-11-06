@@ -139,8 +139,7 @@
     <ClInclude Include="LockFreeStack.h" />
     <ClInclude Include="Log.h" />
     <ClInclude Include="NetLibrary.h" />
-    <ClInclude Include="ObjectPool_LF.h" />
-    <ClInclude Include="ObjectPool_TLS.h" />
+    <ClInclude Include="ObjectPool.h" />
     <ClInclude Include="Profiler.h" />
     <ClInclude Include="RingBuffer.h" />
   </ItemGroup>

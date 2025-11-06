@@ -52,7 +52,7 @@ int main()
 			DWORD now = GetTickCount64();
 			if (now - sPressedTick >= 10000)
 			{
-				ProfileDataOutText("Profile_TLS_100.txt");
+				ProfileDataOutText("Profile_TLS_DebugCode_500.txt");
 				printf("ProfileDataOutText\n");
 				waitingForS = FALSE;
 			}

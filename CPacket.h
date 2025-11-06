@@ -1,14 +1,13 @@
 #pragma once
 #include "Windows.h"
-#include "ObjectPool_TLS.h"
-#include "ObjectPool_LF.h"
+#include "ObjectPool.h"
 
 #define DEFAULT_BUFSIZE 4000
 
-template <typename T>
+template <typename T, bool DebugMode>
 class CObjectPool_TLS;
 
-template <typename T>
+template <typename T, bool DebugMode>
 class CObjectPool_LF;
 
 class CPacket

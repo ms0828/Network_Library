@@ -167,9 +167,11 @@ void CLanServer::Stop()
 
 bool CLanServer::DisconnectSession(ULONGLONG sessionId)
 {
-	//-----------------------------------------------
+	//------------------------------------------------------------
 	// 세션 검색 및 세션 확보(Ref Count 증가)
-	//-----------------------------------------------
+	// - Disconnect flag를 활성화 하기 위해 세션 참조권 확보 필요
+	//		- 엉뚱한 세션에 Disconnect flag 활성화 방지
+	//------------------------------------------------------------
 	Session* session = AcquireSessionById(sessionId);
 	if (session == nullptr)
 		return false;
@@ -234,21 +236,21 @@ unsigned int CLanServer::IOCPWorkerProc(void* arg)
 		PRO_BEGIN("CompletionRoutine");
 		//--------------------------------------------------------------
 		// lpOverlapped가 null인지 확인 필요 
-		// - CP 핸들이 닫힌 경우 (또는 dwMillisecond 타임 아웃) -> Dequeue 실패
-		// - 이 때 completion Key와 transferred는 과거 값 그대로 남아있기 때문에, 엉뚱한 세션에 잘못된 로직이 돌 가능성이 있으므로 무조건 체크
+		//  - CP 핸들이 닫힌 경우 (또는 dwMillisecond 타임 아웃) -> Dequeue 실패
+		//  - 이 때 completion Key와 transferred는 과거 값 그대로 남아있기 때문에, 엉뚱한 세션에 잘못된 로직이 돌 가능성이 있으므로 무조건 체크
 		//	
-		// 일반적으로 Dequeue 실패에 대한 예외 처리를 따로 분류해서 하지 않음	
-		//		- PQCS 종료 신호에 따른 워커 스레드 종료 처리에 대한 예외
-		//		- overlapped null, transferred 0, completion key 0
-		//		- 이에 대한 예외가 상단에 들어갔다면 결국 overlapped null이면 워커 스레드 종료를 타게 됨
-		//		- PQCS 종료 신호에 대한 예외처리로 overlapped가 null임을 일괄 처리하는게 일반적임 (나머지 멤버도 0으로 초기화를 하니까)
+		// Dequeue 실패에 대한 예외 처리를 따로 분류해서 하지 않음을 선택
+		//	- PQCS 종료 신호에 따른 워커 스레드 종료 처리에 대한 예외
+		//	- overlapped null, transferred 0, completion key 0
+		//	- 이에 대한 예외가 상단에 들어갔다면 결국 overlapped null이면 워커 스레드 종료를 타게 됨
+		//	- PQCS 종료 신호에 대한 예외처리로 overlapped가 null임을 일괄 처리 (나머지 멤버도 0으로 초기화를 하니까)
 		//--------------------------------------------------------------
 		if (sessionOlp == nullptr)
 		{
 			_LOG(dfLOG_LEVEL_SYSTEM, L"Completion Status - Overlapped is null!\n");
 			return 0;
 		}
-
+		
 
 		// ------------------------------------------
 		// 세션 검색
@@ -443,7 +445,7 @@ void CLanServer::RecvPost(Session* session)
 	//  - 이전 recvQ(CPacket)에 미완성된 데이터가 있다면 현재 할당한 recvQ(CPacket)로 옮기기
 	// 2. 해당 session에 할당 받은 recvQ(CPacket) 포인터 등록
 	//-------------------------------------------------------------------
-	CPacket* newRecvQ = CPacket::recvPacketPool.allocObject(dfRecvPacketSize);
+	CPacket* newRecvQ = CPacket::recvPacketPool.allocObject();
 	newRecvQ->Clear();
 	if (session->recvQ != nullptr)
 	{

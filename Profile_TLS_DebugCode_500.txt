@@ -1,0 +1,103 @@
+-------------------------------------Thread id : 21976------------------------------------
+        Name        |        Average        |           Min           |           Max           |           Call           |
+------------------------------------------------------------------------------------
+            LF_Alloc |            0.0000§Á |            0.0000§Á |            0.0000§Á |                 0 |
+-------------------------------------Thread id : 22648------------------------------------
+        Name        |        Average        |           Min           |           Max           |           Call           |
+------------------------------------------------------------------------------------
+           TLS_Alloc |            0.1286§Á |            0.0000§Á |          332.8000§Á |           2571854 |
+[Alloc Object] threadChunkPool is Empty - Public ChunkPool Alloc! |            0.6470§Á |            0.3000§Á |           93.7000§Á |              5143 |
+            LF_Alloc |            0.3196§Á |            0.1000§Á |         1165.7000§Á |           2576683 |
+          SendPacket |            3.1860§Á |            0.4000§Á |        32063.6000§Á |           2571703 |
+            SendPost |           41.9469§Á |            3.6000§Á |        32061.9000§Á |            134412 |
+             LF_Free |            0.1773§Á |            0.0000§Á |          203.6000§Á |            536765 |
+[Alloc Object] after Alloc, Node is Empty - Public EmptyChunkPool Free! |            0.8557§Á |            0.4000§Á |           40.9000§Á |              5144 |
+            TLS_Free |            0.3709§Á |            0.1000§Á |           11.8000§Á |               208 |
+[FreeNode] ThreadChunkPool is Empty - Public EmptyChunkPool Alloc! |            0.0000§Á |            0.0000§Á |            0.0000§Á |                 0 |
+-------------------------------------Thread id : 11348------------------------------------
+        Name        |        Average        |           Min           |           Max           |           Call           |
+------------------------------------------------------------------------------------
+   CompletionRoutine |           28.4027§Á |            0.4000§Á |         1288.4000§Á |             60114 |
+            TLS_Free |            0.1382§Á |            0.0000§Á |           13.1000§Á |            498033 |
+[FreeNode] ThreadChunkPool is Empty - Public EmptyChunkPool Alloc! |            0.0000§Á |            0.0000§Á |            0.0000§Á |                 0 |
+            LF_Alloc |            0.5471§Á |            0.1000§Á |            8.4000§Á |              4033 |
+            RecvPost |            4.2808§Á |            2.5000§Á |           36.7000§Á |             12801 |
+           TLS_Alloc |            0.3530§Á |            0.1000§Á |            7.7000§Á |             12801 |
+[Alloc Object] threadChunkPool is Empty - Public ChunkPool Alloc! |            0.0000§Á |            0.0000§Á |            0.0000§Á |                 0 |
+            SendPost |           56.6393§Á |           14.1000§Á |         1286.8000§Á |             22702 |
+             LF_Free |            0.2010§Á |            0.1000§Á |           14.4000§Á |            370405 |
+[FreeNode] Chunk is Full - Public EmptyChunkPool Alloc |            0.6752§Á |            0.3000§Á |            4.1000§Á |               991 |
+FreeNode(after) - ChunkCnt > 2 - Public ChunkPool Free! |            0.7290§Á |            0.5000§Á |            6.6000§Á |               971 |
+[Alloc Object] after Alloc, Node is Empty - Public EmptyChunkPool Free! |            0.8167§Á |            0.6000§Á |            1.1000§Á |                20 |
+-------------------------------------Thread id : 22624------------------------------------
+        Name        |        Average        |           Min           |           Max           |           Call           |
+------------------------------------------------------------------------------------
+   CompletionRoutine |           29.8137§Á |            0.5000§Á |          245.7000§Á |             58149 |
+            RecvPost |            4.2851§Á |            2.5000§Á |           34.6000§Á |             12633 |
+           TLS_Alloc |            0.3328§Á |            0.1000§Á |            6.2000§Á |             12634 |
+[Alloc Object] threadChunkPool is Empty - Public ChunkPool Alloc! |            0.0000§Á |            0.0000§Á |            0.0000§Á |                 0 |
+            LF_Alloc |            0.5629§Á |            0.1000§Á |            9.5000§Á |              4081 |
+            TLS_Free |            0.1752§Á |            0.0000§Á |           15.8000§Á |            489974 |
+[FreeNode] ThreadChunkPool is Empty - Public EmptyChunkPool Alloc! |            0.0000§Á |            0.0000§Á |            0.0000§Á |                 0 |
+            SendPost |           56.6868§Á |            7.0000§Á |          236.5000§Á |             22636 |
+             LF_Free |            0.1981§Á |            0.1000§Á |           13.1000§Á |            372475 |
+[FreeNode] Chunk is Full - Public EmptyChunkPool Alloc |            0.7302§Á |            0.3000§Á |            6.8000§Á |              1030 |
+[Alloc Object] after Alloc, Node is Empty - Public EmptyChunkPool Free! |            0.6736§Á |            0.4000§Á |            1.2000§Á |                74 |
+FreeNode(after) - ChunkCnt > 2 - Public ChunkPool Free! |            0.7341§Á |            0.5000§Á |            4.6000§Á |               956 |
+-------------------------------------Thread id : 20588------------------------------------
+        Name        |        Average        |           Min           |           Max           |           Call           |
+------------------------------------------------------------------------------------
+   CompletionRoutine |           24.7437§Á |            0.3000§Á |          896.1000§Á |             82246 |
+            TLS_Free |            0.1390§Á |            0.0000§Á |           82.8000§Á |            593448 |
+[FreeNode] ThreadChunkPool is Empty - Public EmptyChunkPool Alloc! |            0.0000§Á |            0.0000§Á |            0.0000§Á |                 0 |
+            LF_Alloc |            0.5332§Á |            0.1000§Á |           10.5000§Á |              5147 |
+            RecvPost |            4.3622§Á |            2.4000§Á |           96.9000§Á |             16445 |
+           TLS_Alloc |            0.3473§Á |            0.1000§Á |            7.6000§Á |             16445 |
+[Alloc Object] threadChunkPool is Empty - Public ChunkPool Alloc! |            0.0000§Á |            0.0000§Á |            0.0000§Á |                 0 |
+            SendPost |           56.3171§Á |           17.0000§Á |          820.9000§Á |             26594 |
+             LF_Free |            0.1895§Á |            0.1000§Á |           72.6000§Á |            460377 |
+[FreeNode] Chunk is Full - Public EmptyChunkPool Alloc |            0.7019§Á |            0.4000§Á |            5.1000§Á |              1175 |
+FreeNode(after) - ChunkCnt > 2 - Public ChunkPool Free! |            0.7667§Á |            0.5000§Á |            4.9000§Á |              1154 |
+[Alloc Object] after Alloc, Node is Empty - Public EmptyChunkPool Free! |            0.8316§Á |            0.7000§Á |            1.1000§Á |                21 |
+-------------------------------------Thread id : 14432------------------------------------
+        Name        |        Average        |           Min           |           Max           |           Call           |
+------------------------------------------------------------------------------------
+   CompletionRoutine |           25.3433§Á |            0.4000§Á |          349.7000§Á |             82418 |
+            RecvPost |            4.3722§Á |            2.4000§Á |          120.6000§Á |             16415 |
+           TLS_Alloc |            0.3253§Á |            0.1000§Á |           12.5000§Á |             16416 |
+[Alloc Object] threadChunkPool is Empty - Public ChunkPool Alloc! |            0.0000§Á |            0.0000§Á |            0.0000§Á |                 0 |
+            LF_Alloc |            0.5321§Á |            0.1000§Á |            6.7000§Á |              5077 |
+            TLS_Free |            0.1759§Á |            0.0000§Á |          131.7000§Á |            591082 |
+[FreeNode] ThreadChunkPool is Empty - Public EmptyChunkPool Alloc! |            0.0000§Á |            0.0000§Á |            0.0000§Á |                 0 |
+            SendPost |           56.3372§Á |           12.0000§Á |          309.5000§Á |             26892 |
+             LF_Free |            0.1907§Á |            0.1000§Á |           87.8000§Á |            466575 |
+[FreeNode] Chunk is Full - Public EmptyChunkPool Alloc |            0.7137§Á |            0.4000§Á |            8.0000§Á |              1178 |
+[Alloc Object] after Alloc, Node is Empty - Public EmptyChunkPool Free! |            0.7630§Á |            0.5000§Á |            0.9000§Á |                29 |
+FreeNode(after) - ChunkCnt > 2 - Public ChunkPool Free! |            0.7490§Á |            0.5000§Á |            5.0000§Á |              1149 |
+-------------------------------------Thread id : 1012------------------------------------
+        Name        |        Average        |           Min           |           Max           |           Call           |
+------------------------------------------------------------------------------------
+   CompletionRoutine |           28.1095§Á |            0.4000§Á |          256.7000§Á |             62106 |
+            TLS_Free |            0.1389§Á |            0.0000§Á |           26.0000§Á |            505124 |
+[FreeNode] ThreadChunkPool is Empty - Public EmptyChunkPool Alloc! |            0.0000§Á |            0.0000§Á |            0.0000§Á |                 0 |
+            LF_Alloc |            0.5489§Á |            0.1000§Á |            8.8000§Á |              4142 |
+            RecvPost |            4.2887§Á |            2.3000§Á |           34.9000§Á |             13257 |
+           TLS_Alloc |            0.3451§Á |            0.1000§Á |            6.2000§Á |             13257 |
+[Alloc Object] threadChunkPool is Empty - Public ChunkPool Alloc! |            0.0000§Á |            0.0000§Á |            0.0000§Á |                 0 |
+            SendPost |           56.1653§Á |            8.7000§Á |          235.1000§Á |             23382 |
+             LF_Free |            0.2011§Á |            0.1000§Á |           16.0000§Á |            375793 |
+[FreeNode] Chunk is Full - Public EmptyChunkPool Alloc |            0.7008§Á |            0.3000§Á |            4.4000§Á |               995 |
+[Alloc Object] after Alloc, Node is Empty - Public EmptyChunkPool Free! |            0.6778§Á |            0.5000§Á |            0.8000§Á |                11 |
+FreeNode(after) - ChunkCnt > 2 - Public ChunkPool Free! |            0.7553§Á |            0.5000§Á |            5.5000§Á |               984 |
+-------------------------------------Thread id : 10076------------------------------------
+        Name        |        Average        |           Min           |           Max           |           Call           |
+------------------------------------------------------------------------------------
+             LF_Free |            0.1672§Á |            0.0000§Á |           20.7000§Á |             34330 |
+           TLS_Alloc |            0.3112§Á |            0.0000§Á |           14.8000§Á |             34262 |
+[Alloc Object] threadChunkPool is Empty - Public ChunkPool Alloc! |            0.7015§Á |            0.5000§Á |            0.9000§Á |                68 |
+            LF_Alloc |            0.4528§Á |            0.2000§Á |           14.5000§Á |             17200 |
+          SendPacket |           39.8249§Á |            9.1000§Á |          281.0000§Á |             17132 |
+            SendPost |           38.3399§Á |            7.9000§Á |          278.7000§Á |             17132 |
+            RecvPost |            5.0922§Á |            2.4000§Á |          125.8000§Á |             17132 |
+[Alloc Object] after Alloc, Node is Empty - Public EmptyChunkPool Free! |            0.5955§Á |            0.4000§Á |            0.8000§Á |                68 |
+            TLS_Free |            0.0000§Á |            0.0000§Á |            0.0000§Á |                 0 |

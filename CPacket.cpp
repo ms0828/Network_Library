@@ -3,11 +3,11 @@
 #include "CPacket.h"
 
 
-//CObjectPool_LF<CPacket> CPacket::recvPacketPool(true);
-//CObjectPool_LF<CPacket> CPacket::sendPacketPool(true);
+//CObjectPool_LF<CPacket> CPacket::recvPacketPool(true, 0, 1, 4096);
+//CObjectPool_LF<CPacket> CPacket::sendPacketPool(true, 0, 1, 4096);
 
-CObjectPool_TLS<CPacket> CPacket::recvPacketPool(true);
-CObjectPool_TLS<CPacket> CPacket::sendPacketPool(true);
+CObjectPool_TLS<CPacket> CPacket::recvPacketPool(true, 0, 1, 4096);
+CObjectPool_TLS<CPacket> CPacket::sendPacketPool(true, 0, 1, 4096);
 
 
 CPacket::CPacket()

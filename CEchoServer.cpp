@@ -27,7 +27,7 @@ bool CEchoServer::OnConnectionRequest(SOCKADDR_IN* requestAdr)
 
 void CEchoServer::OnAccept(SOCKADDR_IN* clnAdr, ULONGLONG sessionId)
 {
-	CPacket* packet = CPacket::sendPacketPool.allocObject(dfSendPacketSize);
+	CPacket* packet = CPacket::sendPacketPool.allocObject();
 	packet->Clear();
 	st_PacketHeader header;
 	header.payloadLen = 8;
@@ -58,10 +58,10 @@ void CEchoServer::OnMessage(ULONGLONG sessionId, CPacket* message)
 void CEchoServer::OnMonitoring()
 {
 	printf("\n\n\n\n\n[CPacket]\n");
-	printf("- sendPacketPool / Chunk Pool Cnt = %d\n", CPacket::sendPacketPool.chunkPool.GetSize());
-	printf("- sendPacketPool / Empty Pool Cnt = %d\n", CPacket::sendPacketPool.emptyChunkPool.GetSize());
-	printf("- recvPacketPool / Chunk Pool Cnt = %d\n", CPacket::recvPacketPool.chunkPool.GetSize());
-	printf("- recvPacketPool / Empty Pool Cnt = %d\n", CPacket::recvPacketPool.emptyChunkPool.GetSize());
+	//printf("- sendPacketPool / Chunk Pool Cnt = %d\n", CPacket::sendPacketPool.chunkPool->GetPoolCnt());
+	//printf("- sendPacketPool / Empty Pool Cnt = %d\n", CPacket::sendPacketPool.emptyChunkPool->GetPoolCnt());
+	//printf("- recvPacketPool / Chunk Pool Cnt = %d\n", CPacket::recvPacketPool.chunkPool->GetPoolCnt());
+	//printf("- recvPacketPool / Empty Pool Cnt = %d\n", CPacket::recvPacketPool.emptyChunkPool->GetPoolCnt());
 	printf("\n");
 	printf("[TPS]\n");
 	printf("- accpetTPS = %d\n", GetAcceptTPS());
@@ -96,7 +96,7 @@ unsigned int CEchoServer::EchoThreadProc(void* arg)
 		header.payloadLen = sizeof(message.data);
 
 
-		CPacket* packet = CPacket::sendPacketPool.allocObject(dfSendPacketSize);
+		CPacket* packet = CPacket::sendPacketPool.allocObject();
 		packet->Clear();
 		packet->PutData((char*)&header, sizeof(header));
 		packet->PutData((char*)&message.data, sizeof(__int64));
