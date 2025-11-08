@@ -4,10 +4,10 @@
 
 
 //CObjectPool_LF<CPacket, true> CPacket::recvPacketPool(true, 0, 1, 4096);
-//CObjectPool_LF<CPacket, true> CPacket::sendPacketPool(true, 0, 1, 4096);
+//CObjectPool_LF<CPacket, true> CPacket::sendPacketPool(true, 0, 1, 1024);
 
 CObjectPool_TLS<CPacket, true> CPacket::recvPacketPool(true, 0, 1, 4096);
-CObjectPool_TLS<CPacket, true> CPacket::sendPacketPool(true, 0, 1, 4096);
+CObjectPool_TLS<CPacket, true> CPacket::sendPacketPool(true, 0, 0, 1024);
 
 
 CPacket::CPacket()

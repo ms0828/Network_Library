@@ -118,7 +118,7 @@ private:
 	static const ULONG stampShift = 47;
 
 
-	CObjectPool_LF<CLockFreeStack<T>::Node> nodePool;
+	CObjectPool_LF<CLockFreeStack<T>::Node, true> nodePool;
 };
 
 

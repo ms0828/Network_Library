@@ -46,18 +46,17 @@ int main()
 
 		}
 
-		// 2) s키 누르고 100초 후 프로파일링 저장
+		// 2) s키 누르고 10초 후 프로파일링 저장
 		if (waitingForS)
 		{
 			DWORD now = GetTickCount64();
-			if (now - sPressedTick >= 100000)
+			if (now - sPressedTick >= 10000)
 			{
-				ProfileDataOutText("Profile_TLS4_DebugCode_500.txt");
+				ProfileDataOutText("Profile_TLS6_500.txt");
 				printf("ProfileDataOutText\n");
 				waitingForS = FALSE;
 			}
 		}
 	}
 
-	Sleep(1000);
 }

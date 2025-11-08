@@ -173,6 +173,6 @@ public:
 	static const ULONGLONG nodeMask = (1ULL << 47) - 1;
 	static const ULONG stampShift = 47;
 
-	CObjectPool_LF<CLockFreeQueue::Node> nodePool;
+	CObjectPool_LF<CLockFreeQueue::Node, true> nodePool;
 
 };

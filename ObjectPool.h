@@ -19,7 +19,7 @@ class CObjectPool_ST;
 template<typename T, bool DebugMode>
 class CObjectPool_Lock;
 
-template<typename T, bool DebugMode, bool Profile>
+template<typename T, bool DebugMode>
 class CObjectPool_LF;
 
 template<typename T, bool DebugMode>
@@ -31,7 +31,7 @@ struct Node
 {
 	template<typename, bool> friend class CObjectPool_ST;
 	template<typename, bool> friend class CObjectPool_Lock;
-	template<typename, bool, bool> friend class CObjectPool_LF;
+	template<typename, bool> friend class CObjectPool_LF;
 	template<typename, bool> friend class CObjectPool_TLS;
 private:
 	ULONGLONG headFence;
@@ -47,7 +47,7 @@ template<typename T, bool DebugMode = false>
 class CObjectPool_ST
 {
 	template<typename, bool> friend class CObjectPool_Lock;
-	template<typename, bool, bool> friend class CObjectPool_LF;
+	template<typename, bool> friend class CObjectPool_LF;
 	template<typename, bool> friend class CObjectPool_TLS;
 
 public:
@@ -186,7 +186,7 @@ class CObjectPool_Lock
 {
 	template<typename, bool> friend class CObjectPool_ST;
 	template<typename, bool> friend class CObjectPool_TLS;
-	template<typename, bool, bool> friend class CObjectPool_LF;
+	template<typename, bool> friend class CObjectPool_LF;
 
 public:
 	template<typename... Args>
@@ -327,7 +327,7 @@ private:
 
 
 
-template<typename T, bool DebugMode = false, bool Profile = false>
+template<typename T, bool DebugMode = false>
 class CObjectPool_LF
 {
 	template<typename, bool> friend class CObjectPool_ST;
@@ -383,8 +383,7 @@ public:
 	//---------------------------------------------------------------
 	T* allocObject()
 	{
-		if constexpr (Profile)
-			PRO_BEGIN("LF_Alloc");
+		PRO_BEGIN("LF_Alloc");
 
 		Node<T>* t;
 		Node<T>* nextTop;
@@ -395,7 +394,6 @@ public:
 			maskedT = UnpackingNode(t);
 			if (maskedT == nullptr)
 			{
-				PRO_BEGIN("LF_Alloc - pool empty! - create newNode");
 				Node<T>* newNode = (Node<T>*)malloc(sizeof(Node<T>));
 				newNode->headFence = dfFenceValue;
 				newNode->tailFence = dfFenceValue;
@@ -404,8 +402,8 @@ public:
 
 				T* instance = &newNode->instance;
 				creatorFunc(instance);
+
 				InterlockedIncrement(&allocCnt);
-				PRO_END("LF_Alloc - pool empty! - create newNode");
 				return instance;
 			}
 			nextTop = PackingNode(maskedT->next, GetNodeStamp(t) + 1);
@@ -418,8 +416,7 @@ public:
 		InterlockedDecrement(&poolCnt);
 		InterlockedIncrement(&allocCnt);
 		
-		if constexpr (Profile)
-			PRO_END("LF_Alloc");
+		PRO_END("LF_Alloc");
 		return instance;
 	}
 
@@ -434,8 +431,7 @@ public:
 	//---------------------------------------------------------------
 	bool freeObject(T* objectPtr)
 	{
-		if constexpr (Profile)
-			PRO_BEGIN("LF_Free");
+		PRO_BEGIN("LF_Free");
 
 		Node<T>* freeNode;
 		int t1 = alignof(T);
@@ -481,8 +477,7 @@ public:
 		InterlockedIncrement(&poolCnt);
 		InterlockedDecrement(&allocCnt);
 
-		if constexpr (Profile)
-			PRO_END("LF_Free");
+		PRO_END("LF_Free");
 		return true;
 	}
 
@@ -514,15 +509,15 @@ class CObjectPool_TLS
 {
 	template<typename, bool> friend class CObjectPool_ST;
 	template<typename, bool> friend class CObjectPool_Lock;
-	template<typename, bool, bool> friend class CObjectPool_LF;
+	template<typename, bool> friend class CObjectPool_LF;
 
 private:
 	class CChunk
 	{
+		template<typename, bool> friend class CObjectPool_TLS;
 	public:
 		CChunk()
 		{
-			// 디버깅용 - 호출될 일 없음
 			__debugbreak();
 		}
 
@@ -594,11 +589,12 @@ public:
 		}
 		poolSeed = seed;
 		bPreConstructor = preConstructor;
+		allocCnt = 0;
 		creatorFunc = [args...](void* instance)-> T* {
 			return new(instance) T(args...);
 		};
-		chunkPool = new CObjectPool_LF<CChunk, false, true>(true, poolNum, poolSeed, preConstructor, poolSeed, dfNumOfChunkObject, creatorFunc);
-		emptyChunkPool = new CObjectPool_LF<CChunk, false, true>(true, poolNum, poolSeed, preConstructor, poolSeed, 0, creatorFunc);
+		chunkPool = new CObjectPool_LF<CChunk, false>(true, poolNum, poolSeed, preConstructor, poolSeed, dfNumOfChunkObject, creatorFunc);
+		emptyChunkPool = new CObjectPool_LF<CChunk, false>(true, poolNum, poolSeed, preConstructor, poolSeed, 0, creatorFunc);
 	}
 	~CObjectPool_TLS()
 	{
@@ -615,42 +611,26 @@ public:
 	{
 		PRO_BEGIN("TLS_Alloc");
 		CObjectPool_ST<CChunk>* localChunkPool = GetLocalChunkPool();
-				
+	
 		//--------------------------------------------------------------------------
 		// localChunkPool에 청크가 없으면 (공용)ChunkPool에서 청크 가져오기
 		//--------------------------------------------------------------------------
 		if (localChunkPool->top == nullptr)
-		{
-			PRO_BEGIN("[Alloc Object] threadChunkPool is Empty - Public ChunkPool Pop!");
-			CChunk* fullChunk = chunkPool->allocObject();
-			localChunkPool->freeObject(fullChunk);
-			PRO_END("[Alloc Object] threadChunkPool is Empty - Public ChunkPool Pop!");
-		}	
-		CChunk* chunk = &localChunkPool->top->instance;
-
+			localChunkPool->freeObject(chunkPool->allocObject());
+		
 		//-------------------------------------------------------------------------
 		// 오브젝트 할당
-		// - 할당 후, 청크에 오브젝트가 없으면 (공용)emptyChunkPool로 이동
+		// - 할당 후, 청크에 오브젝트가 없으면 빈 청크를 (공용)emptyChunkPool로 이동
 		//-------------------------------------------------------------------------
-		Node<T>* allocNode = chunk->Pop();
-		if (allocNode == nullptr) // 디버깅용 - 이 조건이 타면 잘못된 것
-			__debugbreak();
-
-		T* instance = &allocNode->instance;
+		CChunk* chunk = &localChunkPool->top->instance;
+		T* instance = &chunk->Pop()->instance;
+		if (chunk->topIndex == -1)
+			emptyChunkPool->freeObject(localChunkPool->allocObject());
+		
 		if (!bPreConstructor)
 			creatorFunc(instance);
 
-		if (chunk->GetNodeCnt() == 0)
-		{
-			PRO_BEGIN("[Alloc Object] after Alloc, Node is Empty - Public EmptyChunkPool Push!");
-			CChunk* emptyChunk = localChunkPool->allocObject();
-			if (chunk != emptyChunk)
-				__debugbreak();
-			if (emptyChunk->GetNodeCnt() != 0)
-				__debugbreak();
-			emptyChunkPool->freeObject(emptyChunk);
-			PRO_END("[Alloc Object] after Alloc, Node is Empty - Public EmptyChunkPool Push!");
-		}
+		InterlockedIncrement(&allocCnt);
 
 		PRO_END("TLS_Alloc");
 		return instance;
@@ -697,68 +677,44 @@ public:
 			}
 		}
 
-		if (!bPreConstructor)
-			objectPtr->~T();
-
 		CObjectPool_ST<CChunk>* localChunkPool = GetLocalChunkPool();
-		if (localChunkPool == nullptr)
-		{
-			_LOG(dfLOG_LEVEL_SYSTEM, L"freeObject : TlsGetValue return nullptr\n");
-			__debugbreak();
-			return false;
-		}
 
 		//----------------------------------------------------------------------------------------
 		// localChunkPool에 청크가 없는 경우 (공용)emptyChunkPool에서 빈 청크를 가져와서 Push 수행
 		//----------------------------------------------------------------------------------------
 		if (localChunkPool->top == nullptr)
-		{
-			PRO_BEGIN("[FreeNode] ThreadChunkPool is Empty - Public EmptyChunkPool Alloc!");
-			CChunk* emptyChunk = emptyChunkPool->allocObject();
-			if (emptyChunk->GetNodeCnt() != 0) // 디버깅용***
-				__debugbreak();
-			localChunkPool->freeObject(emptyChunk);
-			PRO_END("[FreeNode] ThreadChunkPool is Empty - Public EmptyChunkPool Alloc!");
-		}
-		CChunk* chunk = &localChunkPool->top->instance;
-		if (localChunkPool->top == nullptr)
-			__debugbreak();// 디버깅용***
-
+			localChunkPool->freeObject(emptyChunkPool->allocObject());
+		
 		//--------------------------------------------------------------------------
-		// 청크에 노드 삽입
+		// 청크에 노드 반납
 		// - 청크에 노드가 가득찬 경우 (공용)emptyChunkPool에서 빈 청크를 가져오기
 		// 
 		// - 빈 청크를 Push하기 전에 여분의 청크가 있다면 (공용)ChunkPool에 청크 반납
 		// - 따라서 모든 스레드의 청크 풀에는 최대 2개 청크 소유 가능
 		//---------------------------------------------------------------------------
-		bool pushRet = chunk->Push(freeNode);
+		bool pushRet = localChunkPool->top->instance.Push(freeNode);
 		if (pushRet == false)
 		{
-			PRO_BEGIN("[FreeNode] Chunk is Full - Public EmptyChunkPool Alloc");
-			CChunk* emptyChunk = emptyChunkPool->allocObject();
-			if (emptyChunk->GetNodeCnt() != 0) // 디버깅용
-				__debugbreak();
-			PRO_END("[FreeNode] Chunk is Full - Public EmptyChunkPool Alloc");
-
-			if (localChunkPool->GetPoolCnt() > 2)
-			{
-				PRO_BEGIN("FreeNode(after) - ChunkCnt > 2 - Public ChunkPool Free!");
-				CChunk* fullChunk = localChunkPool->allocObject();
-				if (fullChunk->GetNodeCnt() != dfNumOfChunkObject) // 디버깅용
-					__debugbreak(); 
-				chunkPool->freeObject(fullChunk);
-				PRO_END("FreeNode(after) - ChunkCnt > 2 - Public ChunkPool Free!");
-			}
-			localChunkPool->freeObject(emptyChunk);
-			emptyChunk->Push(freeNode);
-			if (emptyChunk->GetNodeCnt() != 1)
-				__debugbreak();
+			if (localChunkPool->GetPoolCnt() > 1)
+				chunkPool->freeObject(localChunkPool->allocObject());
+			
+			localChunkPool->freeObject(emptyChunkPool->allocObject());
+			localChunkPool->top->instance.Push(freeNode);
 		}
+
+		if (!bPreConstructor)
+			objectPtr->~T();
+
+		InterlockedDecrement(&allocCnt);
 
 		PRO_END("TLS_Free");
 		return true;
 	}
 
+	inline ULONG GetAllocCnt() { return allocCnt; };
+
+	inline ULONG GetChunkPoolCnt() { return chunkPool->GetPoolCnt(); };
+	inline ULONG GetEmptyPoolCnt() { return emptyChunkPool->GetPoolCnt(); };
 
 private:
 	inline CObjectPool_ST<CChunk>* GetLocalChunkPool()
@@ -776,9 +732,9 @@ private:
 	DWORD tlsIndex;
 	USHORT poolSeed;
 	bool bPreConstructor;
+	ULONG allocCnt;
 	std::function<T*(void*)> creatorFunc;
-
-public:
-	CObjectPool_LF<CChunk, false, true>* chunkPool;
-	CObjectPool_LF<CChunk, false, true>* emptyChunkPool;
+	
+	CObjectPool_LF<CChunk, false>* chunkPool;
+	CObjectPool_LF<CChunk, false>* emptyChunkPool;
 };

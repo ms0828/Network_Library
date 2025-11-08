@@ -18,7 +18,6 @@ CLanServer::CLanServer()
 
 	shutdownEvent = CreateEvent(nullptr, true, false, nullptr);
 
-
 	acceptTPS = 0;
 	recvMessageTPS = 0;
 	sendMessageTPS = 0;
@@ -319,6 +318,8 @@ unsigned int CLanServer::IOCPWorkerProc(void* arg)
 			_LOG(dfLOG_LEVEL_DEBUG, L"------------Session Id : %016llx / CompletionPort : Send  / transferred : %d------------\n", session->sessionId, transferred);
 			for (int i = 0; i < session->sendPacketCount; i++)
 				CPacket::sendPacketPool.freeObject(session->freePacket[i]);
+			
+			
 			session->sendPacketCount = 0;
 			InterlockedExchange(&session->isSending, false);
 			
@@ -828,8 +829,6 @@ unsigned int CLanServer::MonitoringThreadProc(void* arg)
 			_LOG(dfLOG_LEVEL_SYSTEM, L"shutdown event is signal - MonitoringThread Exit!");
 			break;
 		}
-
-
 		core->OnMonitoring();
 	}
 
