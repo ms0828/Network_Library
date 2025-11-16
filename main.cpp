@@ -9,6 +9,7 @@ using namespace std;
 
 int main()
 {
+	InitLog(dfLOG_LEVEL_ERROR, ELogMode::NOLOG);
 	CEchoServer server;
 	server.Start(L"0.0.0.0", 6000, 5, 5000);
 	
@@ -32,6 +33,7 @@ int main()
 			else if (ch == 27) // ESC 키로 종료
 			{
 				server.Stop();
+				Sleep(3000);
 				break;
 			}
 			else if (ch == 'd' || ch == 'D')
@@ -43,7 +45,6 @@ int main()
 						server.DisconnectSession(server.sessionArr[i].sessionId);
 				}
 			}
-
 		}
 
 		// 2) s키 누르고 10초 후 프로파일링 저장
@@ -58,5 +59,7 @@ int main()
 			}
 		}
 	}
+
+	CloseLog();
 
 }
